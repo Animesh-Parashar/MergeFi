@@ -13,25 +13,25 @@ const chains: Chain[] = [
     id: 'ethereum',
     name: 'Ethereum',
     icon: '⟠',
-    color: 'from-blue-600 to-purple-600'
+    color: 'bg-blue-600'
   },
   {
     id: 'polygon',
     name: 'Polygon',
     icon: '⬡',
-    color: 'from-purple-600 to-pink-600'
+    color: 'bg-purple-600'
   },
   {
     id: 'avail',
     name: 'Avail Nexus',
     icon: '◈',
-    color: 'from-cyan-600 to-blue-600'
+    color: 'bg-cyan-600'
   },
   {
     id: 'arbitrum',
     name: 'Arbitrum',
     icon: '◆',
-    color: 'from-blue-500 to-cyan-500'
+    color: 'bg-blue-500'
   }
 ];
 
@@ -61,13 +61,13 @@ export default function WalletModal({ isOpen, onClose, onConnect }: WalletModalP
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="relative w-full max-w-md"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-violet-500/20 rounded-3xl blur-2xl"></div>
+              <div className="absolute inset-0 bg-cyan-500/20 rounded-3xl blur-2xl"></div>
 
               <div className="relative bg-slate-900 border border-slate-800/50 rounded-3xl overflow-hidden">
                 <div className="p-6 border-b border-slate-800/50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-cyan-500/20 to-violet-500/20 rounded-xl flex items-center justify-center text-cyan-400">
+                      <div className="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400">
                         <Wallet className="w-5 h-5" />
                       </div>
                       <h2 className="text-2xl font-bold">Connect Wallet</h2>
@@ -100,12 +100,9 @@ export default function WalletModal({ isOpen, onClose, onConnect }: WalletModalP
                       }}
                       className="w-full group relative"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 rounded-xl blur-lg transition-opacity"
-                           style={{ background: `linear-gradient(to right, var(--tw-gradient-stops))` }}></div>
-
                       <div className="relative bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 flex items-center justify-between transition-all">
                         <div className="flex items-center space-x-4">
-                          <div className={`w-12 h-12 bg-gradient-to-br ${chain.color} rounded-xl flex items-center justify-center text-white text-2xl font-bold shadow-lg`}>
+                          <div className={`w-12 h-12 ${chain.color} rounded-xl flex items-center justify-center text-white text-2xl font-bold shadow-lg`}>
                             {chain.icon}
                           </div>
                           <div className="text-left">
