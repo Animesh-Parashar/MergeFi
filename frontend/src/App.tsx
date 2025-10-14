@@ -23,12 +23,8 @@ function App() {
   });
 
   const handleConnectGithub = () => {
-    setIsGithubConnected(true);
-    setUser({
-      username: 'alex_developer',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=alex'
-    });
-    setCurrentScreen('dashboard');
+
+     window.location.href = "http://localhost:5000/auth/github";
   };
 
   const handleLogout = () => {

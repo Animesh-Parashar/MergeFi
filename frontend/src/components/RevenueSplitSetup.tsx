@@ -150,7 +150,7 @@ export default function RevenueSplitSetup({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleAISuggest}
-              className="flex items-center space-x-2 px-5 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 rounded-xl font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-shadow"
+              className="flex items-center space-x-2 px-5 py-3 bg-violet-600 hover:bg-violet-600/80 rounded-xl font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all"
             >
               <Brain className="w-5 h-5" />
               <span>Auto Suggest Split (AI)</span>
