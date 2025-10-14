@@ -1,7 +1,41 @@
 import { motion } from 'framer-motion';
 import { Github, Zap, DollarSign, Globe, Shield, TrendingUp } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 
-export default function LandingPage({ onConnectGithub }: { onConnectGithub: () => void }) {
+export default function LandingPage() {
+  const { isAuthenticated, login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Handle GitHub OAuth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const loginParam = urlParams.get('login');
+    
+    if (loginParam) {
+      login({
+        username: loginParam,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${loginParam}`
+      });
+      // Redirect to dashboard after successful login
+      navigate('/dashboard');
+    }
+  }, [location.search, login, navigate]);
+
+  // If already authenticated, redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleConnectGithub = () => {
+    // Redirect to backend GitHub OAuth
+    window.location.href = "http://localhost:5000/auth/github";
+  };
+
   const features = [
     {
       icon: <Shield className="w-8 h-8" />,
@@ -44,7 +78,7 @@ export default function LandingPage({ onConnectGithub }: { onConnectGithub: () =
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={onConnectGithub}
+              onClick={handleConnectGithub}
               className="flex items-center space-x-2 px-6 py-3 bg-cyan-600 hover:bg-cyan-600/80 rounded-xl font-semibold shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all"
             >
               <Github className="w-5 h-5" />
@@ -80,7 +114,7 @@ export default function LandingPage({ onConnectGithub }: { onConnectGithub: () =
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={onConnectGithub}
+              onClick={handleConnectGithub}
               className="inline-flex items-center space-x-3 px-8 py-4 bg-cyan-600 hover:bg-cyan-600/80 rounded-2xl font-bold text-lg shadow-2xl shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all"
             >
               <Github className="w-6 h-6" />

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { ArrowLeft, Users, Brain, Rocket, ExternalLink, CheckCircle, Copy } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 
 interface Contributor {
   id: string;
@@ -46,23 +47,34 @@ const mockContributors: Contributor[] = [
   }
 ];
 
-interface RevenueSplitSetupProps {
-  repoName: string;
-  repoDescription: string;
-  onBack: () => void;
-  onDeploy: () => void;
-}
+const repoMockData: Record<string, { name: string; description: string; contractAddress: string }> = {
+  '1': {
+    name: 'awesome-web3-toolkit',
+    description: 'A comprehensive toolkit for building decentralized applications',
+    contractAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
+  },
+  '2': {
+    name: 'blockchain-payment-gateway',
+    description: 'Open-source payment gateway with multi-chain support',
+    contractAddress: '0x842d35Cc6634C0532925a3b844Bc9e7595f0bEc'
+  },
+  '3': {
+    name: 'defi-analytics-platform',
+    description: 'Real-time analytics dashboard for DeFi protocols',
+    contractAddress: '0x942d35Cc6634C0532925a3b844Bc9e7595f0bEd'
+  }
+};
 
-export default function RevenueSplitSetup({
-  repoName,
-  repoDescription,
-  onBack,
-  onDeploy
-}: RevenueSplitSetupProps) {
+export default function RevenueSplitSetup() {
+  const navigate = useNavigate();
+  const { repoId } = useParams<{ repoId: string }>();
   const [contributors, setContributors] = useState(mockContributors);
   const [isDeployed, setIsDeployed] = useState(false);
-  const [contractAddress] = useState('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb');
-  const [txHash] = useState('0x1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t');
+  const [showWalletModal, setShowWalletModal] = useState(false);
+
+  const currentRepo = repoMockData[repoId || '1'] || repoMockData['1'];
+  const contractAddress = currentRepo.contractAddress;
+  const txHash = '0x1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t';
 
   const totalPercent = contributors.reduce((sum, c) => sum + c.editablePercent, 0);
 
@@ -85,8 +97,12 @@ export default function RevenueSplitSetup({
   };
 
   const handleDeploy = () => {
+    setShowWalletModal(true);
+  };
+
+  const handleWalletConnect = () => {
     setIsDeployed(true);
-    onDeploy();
+    setShowWalletModal(false);
   };
 
   const copyToClipboard = (text: string) => {
@@ -100,7 +116,7 @@ export default function RevenueSplitSetup({
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           whileHover={{ x: -5 }}
-          onClick={onBack}
+          onClick={() => navigate('/dashboard')}
           className="flex items-center space-x-2 text-slate-400 hover:text-cyan-400 mb-8 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -116,9 +132,9 @@ export default function RevenueSplitSetup({
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-4xl font-bold mb-3 text-white font-mono">
-                  {repoName}
+                  {currentRepo.name}
                 </h1>
-                <p className="text-slate-400 mb-4">{repoDescription}</p>
+                <p className="text-slate-400 mb-4">{currentRepo.description}</p>
                 <div className="flex items-center space-x-4 text-sm text-slate-500">
                   <div className="flex items-center space-x-1">
                     <Users className="w-4 h-4" />
@@ -127,7 +143,7 @@ export default function RevenueSplitSetup({
                 </div>
               </div>
               <a
-                href={`https://github.com/${repoName}`}
+                href={`https://github.com/${currentRepo.name}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-slate-400 hover:text-cyan-400 transition-colors"
@@ -277,7 +293,7 @@ export default function RevenueSplitSetup({
               disabled={totalPercent !== 100}
               className={`flex items-center space-x-3 px-8 py-4 rounded-2xl font-bold text-lg shadow-2xl transition-all ${
                 totalPercent === 100
-                  ? 'bg-gradient-to-r from-cyan-600 to-violet-600 shadow-cyan-500/30 hover:shadow-cyan-500/50'
+                  ? 'bg-cyan-600 hover:bg-cyan-600/80 shadow-cyan-500/30 hover:shadow-cyan-500/50'
                   : 'bg-slate-800/50 text-slate-500 cursor-not-allowed'
               }`}
             >
@@ -290,7 +306,7 @@ export default function RevenueSplitSetup({
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
-            className="bg-gradient-to-br from-cyan-500/10 to-violet-500/10 backdrop-blur-sm border border-cyan-500/30 rounded-2xl p-8"
+            className="bg-cyan-500/10 backdrop-blur-sm border border-cyan-500/30 rounded-2xl p-8"
           >
             <div className="flex items-start space-x-4 mb-6">
               <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400">
@@ -344,6 +360,39 @@ export default function RevenueSplitSetup({
           </motion.div>
         )}
       </div>
+
+      {/* Wallet Modal */}
+      {showWalletModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-slate-800/50 rounded-3xl p-6 max-w-md w-full"
+          >
+            <h3 className="text-2xl font-bold mb-4">Connect Wallet</h3>
+            <p className="text-slate-400 mb-6">Select a blockchain network to deploy your contract</p>
+            
+            <div className="space-y-3">
+              {['Ethereum', 'Polygon', 'Avail Nexus'].map((chain) => (
+                <button
+                  key={chain}
+                  onClick={handleWalletConnect}
+                  className="w-full p-4 bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/50 rounded-xl transition-colors text-left"
+                >
+                  {chain}
+                </button>
+              ))}
+            </div>
+            
+            <button
+              onClick={() => setShowWalletModal(false)}
+              className="mt-4 w-full p-3 bg-slate-800/50 rounded-xl text-slate-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

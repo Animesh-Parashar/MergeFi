@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { ArrowLeft, DollarSign, TrendingUp, ExternalLink, Copy, Calendar } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 
 interface Payment {
   id: string;
@@ -54,25 +55,36 @@ const mockPayments: Payment[] = [
   }
 ];
 
-interface ContributorEarningsProps {
-  repoName: string;
-  contractAddress: string;
-  onBack: () => void;
-}
+const repoMockData: Record<string, { name: string; description: string; contractAddress: string }> = {
+  '1': {
+    name: 'awesome-web3-toolkit',
+    description: 'A comprehensive toolkit for building decentralized applications',
+    contractAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
+  },
+  '2': {
+    name: 'blockchain-payment-gateway',
+    description: 'Open-source payment gateway with multi-chain support',
+    contractAddress: '0x842d35Cc6634C0532925a3b844Bc9e7595f0bEc'
+  },
+  '3': {
+    name: 'defi-analytics-platform',
+    description: 'Real-time analytics dashboard for DeFi protocols',
+    contractAddress: '0x942d35Cc6634C0532925a3b844Bc9e7595f0bEd'
+  }
+};
 
-export default function ContributorEarnings({
-  repoName,
-  contractAddress,
-  onBack
-}: ContributorEarningsProps) {
+export default function ContributorEarnings() {
+  const navigate = useNavigate();
+  const { repoId } = useParams<{ repoId: string }>();
   const [payments] = useState(mockPayments);
+
+  const currentRepo = repoMockData[repoId || '1'] || repoMockData['1'];
 
   const totalEarnings = payments
     .filter((p) => p.status === 'completed')
     .reduce((sum, p) => sum + parseFloat(p.amount), 0);
 
   const lastPayment = payments.length > 0 ? payments[0] : null;
-
   const contributionScore = 28;
 
   const copyToClipboard = (text: string) => {
@@ -90,13 +102,13 @@ export default function ContributorEarnings({
   const maxAmount = Math.max(...earningsData.map((d) => d.amount));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <div className="min-h-screen bg-slate-900 text-white">
       <div className="max-w-7xl mx-auto p-8">
         <motion.button
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           whileHover={{ x: -5 }}
-          onClick={onBack}
+          onClick={() => navigate('/dashboard')}
           className="flex items-center space-x-2 text-slate-400 hover:text-cyan-400 mb-8 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -108,8 +120,8 @@ export default function ContributorEarnings({
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-white to-cyan-200 bg-clip-text text-transparent font-mono">
-            {repoName}
+          <h1 className="text-4xl font-bold mb-2 text-white font-mono">
+            {currentRepo.name}
           </h1>
           <p className="text-slate-400">Your earnings and contribution metrics</p>
         </motion.div>
@@ -121,11 +133,11 @@ export default function ContributorEarnings({
             transition={{ delay: 0.1 }}
             className="relative group"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-violet-500/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all"></div>
+            <div className="absolute inset-0 bg-cyan-500/5 rounded-2xl blur-xl group-hover:blur-2xl transition-all"></div>
             <div className="relative bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-slate-400 text-sm font-semibold">Total Earnings</span>
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500/20 to-violet-500/20 rounded-lg flex items-center justify-center text-cyan-400">
+                <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center text-cyan-400">
                   <DollarSign className="w-5 h-5" />
                 </div>
               </div>
@@ -142,11 +154,11 @@ export default function ContributorEarnings({
             transition={{ delay: 0.2 }}
             className="relative group"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all"></div>
+            <div className="absolute inset-0 bg-violet-500/5 rounded-2xl blur-xl group-hover:blur-2xl transition-all"></div>
             <div className="relative bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-slate-400 text-sm font-semibold">Latest Payout</span>
-                <div className="w-10 h-10 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 rounded-lg flex items-center justify-center text-violet-400">
+                <div className="w-10 h-10 bg-violet-500/20 rounded-lg flex items-center justify-center text-violet-400">
                   <Calendar className="w-5 h-5" />
                 </div>
               </div>
@@ -165,11 +177,11 @@ export default function ContributorEarnings({
             transition={{ delay: 0.3 }}
             className="relative group"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all"></div>
+            <div className="absolute inset-0 bg-emerald-500/5 rounded-2xl blur-xl group-hover:blur-2xl transition-all"></div>
             <div className="relative bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-slate-400 text-sm font-semibold">Contribution Score</span>
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-lg flex items-center justify-center text-emerald-400">
+                <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center text-emerald-400">
                   <TrendingUp className="w-5 h-5" />
                 </div>
               </div>
@@ -204,7 +216,7 @@ export default function ContributorEarnings({
                   >
                     ${data.amount}
                   </motion.div>
-                  <div className="w-full bg-gradient-to-t from-cyan-600 to-violet-600 rounded-t-lg"></div>
+                  <div className="w-full bg-cyan-600 rounded-t-lg"></div>
                   <div className="mt-3 text-xs text-slate-400 font-mono">{data.month}</div>
                 </motion.div>
               ))}
@@ -222,13 +234,13 @@ export default function ContributorEarnings({
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-slate-400 font-semibold">Smart Contract Address</span>
               <button
-                onClick={() => copyToClipboard(contractAddress)}
+                onClick={() => copyToClipboard(currentRepo.contractAddress)}
                 className="text-cyan-400 hover:text-cyan-300 transition-colors"
               >
                 <Copy className="w-4 h-4" />
               </button>
             </div>
-            <code className="text-cyan-400 font-mono text-sm break-all">{contractAddress}</code>
+            <code className="text-cyan-400 font-mono text-sm break-all">{currentRepo.contractAddress}</code>
           </div>
         </motion.div>
 

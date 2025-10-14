@@ -38,6 +38,13 @@ app.get("/auth/github/callback", async (req, res) => {
     const userRes = await axios.get(`https://api.github.com/user`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+    //  const repoRes = await axios.get("https://api.github.com/user/repos", {
+    //   headers: { Authorization: `Bearer ${accessToken}` },
+    // });
+    // const repocont = await axios.get("https://api.github.com/user//repos/:owner/:repo/contributors", {
+    //   headers: { Authorization: `Bearer ${accessToken}` },
+    // });
+    
 
     // You can now store token in DB or session
     const user = userRes.data;

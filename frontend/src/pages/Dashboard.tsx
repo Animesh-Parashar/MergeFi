@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
 import { Home, DollarSign, Brain, Settings, LogOut, Github, ExternalLink, Users, GitBranch } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Repository {
   id: string;
@@ -42,19 +44,33 @@ const mockRepos: Repository[] = [
   }
 ];
 
-interface DashboardProps {
-  user: {
-    username: string;
-    avatar: string;
-  };
-  onLogout: () => void;
-  onSetupRevenue: (repoId: string) => void;
-  onViewEarnings: (repoId: string) => void;
-}
-
-export default function Dashboard({ user, onLogout, onSetupRevenue, onViewEarnings }: DashboardProps) {
+export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'owned' | 'contributed'>('owned');
   const [activePage, setActivePage] = useState<'dashboard' | 'payouts' | 'ai-split' | 'settings'>('dashboard');
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+
+  const urlParams = new URLSearchParams(window.location.search);
+const login = urlParams.get('login');
+const repos = urlParams.get('repos');
+const contributors = urlParams.get('contributors');
+console.log(login);
+console.log(repos);
+console.log(contributors);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
+  const handleSetupRevenue = (repoId: string) => {
+    navigate(`/revenue-split/${repoId}`);
+  };
+
+  const handleViewEarnings = (repoId: string) => {
+    navigate(`/earnings/${repoId}`);
+  };
 
   const filteredRepos = mockRepos.filter(repo =>
     activeTab === 'owned' ? repo.isOwner : !repo.isOwner
@@ -86,12 +102,12 @@ export default function Dashboard({ user, onLogout, onSetupRevenue, onViewEarnin
 
           <div className="flex items-center space-x-3 p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
             <img
-              src={user.avatar}
-              alt={user.username}
+              src={user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}
+              alt={user?.username || 'User'}
               className="w-10 h-10 rounded-lg"
             />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm truncate">{user.username}</p>
+              <p className="font-semibold text-sm truncate">{user?.username || 'User'}</p>
               <div className="flex items-center space-x-1 text-xs text-cyan-400">
                 <Github className="w-3 h-3" />
                 <span>Connected</span>
@@ -121,7 +137,7 @@ export default function Dashboard({ user, onLogout, onSetupRevenue, onViewEarnin
         <div className="p-4 border-t border-slate-800/50">
           <motion.button
             whileHover={{ x: 5 }}
-            onClick={onLogout}
+            onClick={handleLogout}
             className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800/30 hover:text-red-400 transition-colors"
           >
             <LogOut className="w-5 h-5" />
@@ -226,7 +242,7 @@ export default function Dashboard({ user, onLogout, onSetupRevenue, onViewEarnin
                           </div>
                         </div>
                         <a
-                          href={`https://github.com/${user.username}/${repo.name}`}
+                          href={`https://github.com/${user?.username || 'user'}/${repo.name}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-slate-400 hover:text-cyan-400 transition-colors"
@@ -240,7 +256,7 @@ export default function Dashboard({ user, onLogout, onSetupRevenue, onViewEarnin
                           <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            onClick={() => onSetupRevenue(repo.id)}
+                            onClick={() => handleSetupRevenue(repo.id)}
                             className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
                               repo.hasSmartContract
                                 ? 'bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:border-cyan-500/30'
@@ -253,7 +269,7 @@ export default function Dashboard({ user, onLogout, onSetupRevenue, onViewEarnin
                           <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            onClick={() => onViewEarnings(repo.id)}
+                            onClick={() => handleViewEarnings(repo.id)}
                             className="flex-1 px-4 py-3 bg-cyan-600 hover:bg-cyan-600/80 rounded-xl font-semibold shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all"
                           >
                             View Earnings
