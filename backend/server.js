@@ -41,7 +41,7 @@ app.get("/auth/github/callback", async (req, res) => {
     //  const repoRes = await axios.get("https://api.github.com/user/repos", {
     //   headers: { Authorization: `Bearer ${accessToken}` },
     // });
-    // const repocont = await axios.get("https://api.github.com/user//repos/:owner/:repo/contributors", {
+    // const repocont = await axios.get("https://api.github.com/user/repos/:owner/:repo/contributors", {
     //   headers: { Authorization: `Bearer ${accessToken}` },
     // });
     
