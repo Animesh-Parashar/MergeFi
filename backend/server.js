@@ -50,7 +50,7 @@ app.get("/auth/github/callback", async (req, res) => {
     const user = userRes.data;
 
     // Redirect to frontend with user data (for demo)
-    res.redirect(`${process.env.FRONTEND_URL}/dashboard?login=${user.login}`);
+    res.redirect(`${process.env.FRONTEND_URL}/owner?login=${user.login}`);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "GitHub OAuth failed" });

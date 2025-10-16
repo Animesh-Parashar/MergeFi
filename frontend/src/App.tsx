@@ -1,44 +1,25 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import LandingPage from './pages/LandingPage';
-import Dashboard from './pages/Dashboard';
-import RevenueSplitSetup from './pages/RevenueSplitSetup';
-import ContributorEarnings from './pages/ContributorEarnings';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Navbar } from './components/Navbar';
+import { Home } from './pages/Home';
+import { Maintainer } from './pages/Maintainer';
+import { Contributor } from './pages/Contributor';
+import { Owner } from './pages/Owner';
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/revenue-split/:repoId" 
-            element={
-              <ProtectedRoute>
-                <RevenueSplitSetup />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/earnings/:repoId" 
-            element={
-              <ProtectedRoute>
-                <ContributorEarnings />
-              </ProtectedRoute>
-            } 
-          />
-        </Routes>
-      </Router>
-    </AuthProvider>
+    <BrowserRouter>
+      <div className="min-h-screen bg-black">
+        <Navbar />
+        <div className="pt-16">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/maintainer" element={<Maintainer />} />
+            <Route path="/contributor" element={<Contributor />} />
+            <Route path="/owner" element={<Owner />} />
+          </Routes>
+        </div>
+      </div>
+    </BrowserRouter>
   );
 }
 
