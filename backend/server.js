@@ -2,10 +2,12 @@ import express from "express";
 import axios from "axios";
 import dotenv from "dotenv";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 
 dotenv.config();
 const app = express();
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+app.use(cookieParser());
 
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
@@ -34,28 +36,28 @@ app.get("/auth/github/callback", async (req, res) => {
 
     const accessToken = tokenRes.data.access_token;
 
-    // Fetch user info
-    const userRes = await axios.get(`https://api.github.com/user`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+    res.cookie('github_token', accessToken, {
+      httpOnly: true,        // Prevents XSS attacks
+      sameSite: 'lax',       // CSRF protection
+      maxAge: 24 * 60 * 60 * 1000,  // 24 hours
+      path: '/'
     });
-    //  const repoRes = await axios.get("https://api.github.com/user/repos", {
-    //   headers: { Authorization: `Bearer ${accessToken}` },
-    // });
-    // const repocont = await axios.get("https://api.github.com/user/repos/:owner/:repo/contributors", {
-    //   headers: { Authorization: `Bearer ${accessToken}` },
-    // });
-    
-
-    // You can now store token in DB or session
-    const user = userRes.data;
 
     // Redirect to frontend with user data (for demo)
-    res.redirect(`${process.env.FRONTEND_URL}/owner?login=${user.login}`);
+    res.redirect(`${process.env.FRONTEND_URL}/`);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "GitHub OAuth failed" });
   }
 });
+
+//using routes
+
+import githubroute from './routes/github.routes.js'
+
+
+app.use("/api/",githubroute);
+
 
 app.listen(process.env.PORT, () =>
   console.log(`Server running on http://localhost:${process.env.PORT}`)
