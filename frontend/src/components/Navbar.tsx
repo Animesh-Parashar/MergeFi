@@ -1,9 +1,30 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, User, Users, Shield } from 'lucide-react';
+import { Home, User, Users, Shield, Wallet } from 'lucide-react';
+import {
+  useConnect,
+  useDisconnect,
+  useAccount,
+} from 'wagmi'
 
 export function Navbar() {
   const location = useLocation();
+  
+  // Wagmi hooks
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { address, isConnected } = useAccount();
+
+  const handleConnect = () => {
+    const connector = connectors[0]; // Use first available connector (injected)
+    if (connector) {
+      connect({ connector });
+    }
+  };
+
+  const handleDisconnect = () => {
+    disconnect();
+  };
 
   const links = [
     { path: '/', label: 'Home', icon: Home },
@@ -23,7 +44,7 @@ export function Navbar() {
               <div className="w-3 h-3 bg-green-500"></div>
             </div>
             <span className="text-white font-bold text-xl font-mono">
-              CollabPay
+              MERGEFI
             </span>
           </Link>
 
@@ -57,10 +78,28 @@ export function Navbar() {
             })}
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-gray-500 text-xs font-mono">LIVE</span>
-          </div>
+          {/* MetaMask Connect Button */}
+          {!isConnected ? (
+            <motion.button
+              onClick={handleConnect}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-black font-mono text-sm rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <Wallet className="w-4 h-4" />
+              Connect MetaMask
+            </motion.button>
+          ) : (
+            <motion.button
+              onClick={handleDisconnect}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white font-mono text-sm rounded-lg border border-gray-600 hover:bg-gray-700 transition-colors"
+            >
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span>{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}</span>
+            </motion.button>
+          )}
         </div>
       </div>
     </nav>
