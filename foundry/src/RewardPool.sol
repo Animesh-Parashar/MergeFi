@@ -1,145 +1,130 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-contract RewardPool {
-    address public maintainer;
-    uint256 public totalFund;
-    
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract RewardPool is Ownable {
     struct Contributor {
         address wallet;
-        uint256 allocation; // percentage in basis points (10000 = 100%)
+        uint256 allocation; // basis points (10000 = 100%)
         string githubUsername;
         bool isActive;
     }
-    
+
     mapping(address => Contributor) public contributors;
     address[] public contributorAddresses;
-    
-    event FundSet(uint256 totalAmount);
-    event ContributorAdded(address contributor, uint256 allocation, string githubUsername);
-    event ContributorUpdated(address contributor, uint256 newAllocation);
-    event ContributorRemoved(address contributor);
-    
-    modifier onlyMaintainer() {
-        require(msg.sender == maintainer, "Not authorized: Only maintainer");
-        _;
-    }
-    
-    constructor(address _maintainer) {
-        maintainer = _maintainer;
-    }
-    
-    // Set total fund amount (to be transferred via Avail SDK)
-    function setTotalFund(uint256 _totalFund) external onlyMaintainer {
+
+    uint256 public totalFund;
+    uint256 public totalAllocations; // Sum of all allocations in basis points
+
+    event ContributorAdded(
+        address indexed contributor,
+        uint256 allocation,
+        string githubUsername
+    );
+    event AllocationUpdated(
+        address indexed contributor,
+        uint256 oldAllocation,
+        uint256 newAllocation
+    );
+    event TotalFundSet(uint256 amount);
+
+    constructor(address _maintainer) Ownable(_maintainer) {}
+
+    function setTotalFund(uint256 _totalFund) external onlyOwner {
         totalFund = _totalFund;
-        emit FundSet(_totalFund);
+        emit TotalFundSet(_totalFund);
     }
-    
-    // Add or update contributor allocation
+
     function setContributorAllocation(
-        address _contributor, 
-        uint256 _allocation, 
-        string memory _githubUsername
-    ) external onlyMaintainer {
-        require(_contributor != address(0), "Invalid contributor address");
-        require(_allocation > 0 && _allocation <= 10000, "Allocation must be between 1-10000 basis points");
-        require(getTotalAllocations() - contributors[_contributor].allocation + _allocation <= 10000, "Total allocation exceeds 100%");
-        
-        bool isNewContributor = !contributors[_contributor].isActive;
-        
-        contributors[_contributor] = Contributor({
-            wallet: _contributor,
-            allocation: _allocation,
-            githubUsername: _githubUsername,
-            isActive: true
-        });
-        
+        address contributor,
+        uint256 allocation,
+        string memory githubUsername
+    ) external onlyOwner {
+        require(contributor != address(0), "Invalid contributor address");
+        require(allocation > 0 && allocation <= 10000, "Invalid allocation");
+        require(
+            bytes(githubUsername).length > 0,
+            "GitHub username cannot be empty"
+        );
+
+        bool isNewContributor = !contributors[contributor].isActive;
+        uint256 oldAllocation = contributors[contributor].allocation;
+
         if (isNewContributor) {
-            contributorAddresses.push(_contributor);
-            emit ContributorAdded(_contributor, _allocation, _githubUsername);
+            contributorAddresses.push(contributor);
+            contributors[contributor] = Contributor({
+                wallet: contributor,
+                allocation: allocation,
+                githubUsername: githubUsername,
+                isActive: true
+            });
+            totalAllocations += allocation;
+            emit ContributorAdded(contributor, allocation, githubUsername);
         } else {
-            emit ContributorUpdated(_contributor, _allocation);
+            totalAllocations = totalAllocations - oldAllocation + allocation;
+            contributors[contributor].allocation = allocation;
+            contributors[contributor].githubUsername = githubUsername;
+            emit AllocationUpdated(contributor, oldAllocation, allocation);
         }
+
+        require(totalAllocations <= 10000, "Total allocations exceed 100%");
     }
-    
-    // Remove contributor
-    function removeContributor(address _contributor) external onlyMaintainer {
-        require(contributors[_contributor].isActive, "Contributor not found");
-        
-        contributors[_contributor].isActive = false;
-        contributors[_contributor].allocation = 0;
-        
-        // Remove from array
-        for (uint i = 0; i < contributorAddresses.length; i++) {
-            if (contributorAddresses[i] == _contributor) {
-                contributorAddresses[i] = contributorAddresses[contributorAddresses.length - 1];
-                contributorAddresses.pop();
-                break;
-            }
-        }
-        
-        emit ContributorRemoved(_contributor);
+
+    function getContributorAmount(
+        address contributor
+    ) external view returns (uint256) {
+        require(contributors[contributor].isActive, "Contributor not active");
+        return (totalFund * contributors[contributor].allocation) / 10000;
     }
-    
-    // Get contributor's allocated amount in PYUSD
-    function getContributorAmount(address _contributor) external view returns (uint256) {
-        if (!contributors[_contributor].isActive || totalFund == 0) {
-            return 0;
-        }
-        return (totalFund * contributors[_contributor].allocation) / 10000;
+
+    function getTotalAllocations() external view returns (uint256) {
+        return totalAllocations;
     }
-    
-    // Get all active contributors for Avail SDK
-    function getAllContributors() external view returns (
-        address[] memory addresses,
-        uint256[] memory allocations,
-        uint256[] memory amounts,
-        string[] memory githubUsernames
-    ) {
+
+    function getRemainingAllocation() external view returns (uint256) {
+        return 10000 - totalAllocations;
+    }
+
+    function getAllContributors()
+        external
+        view
+        returns (
+            address[] memory addresses,
+            uint256[] memory allocations,
+            uint256[] memory amounts,
+            string[] memory githubUsernames
+        )
+    {
         uint256 activeCount = 0;
-        
+
         // Count active contributors
         for (uint i = 0; i < contributorAddresses.length; i++) {
             if (contributors[contributorAddresses[i]].isActive) {
                 activeCount++;
             }
         }
-        
+
         addresses = new address[](activeCount);
         allocations = new uint256[](activeCount);
         amounts = new uint256[](activeCount);
         githubUsernames = new string[](activeCount);
-        
+
         uint256 index = 0;
         for (uint i = 0; i < contributorAddresses.length; i++) {
             address addr = contributorAddresses[i];
             if (contributors[addr].isActive) {
                 addresses[index] = addr;
                 allocations[index] = contributors[addr].allocation;
-                amounts[index] = totalFund > 0 ? (totalFund * contributors[addr].allocation) / 10000 : 0;
+                amounts[index] =
+                    (totalFund * contributors[addr].allocation) /
+                    10000;
                 githubUsernames[index] = contributors[addr].githubUsername;
                 index++;
             }
         }
     }
-    
-    // Get total allocated percentage
-    function getTotalAllocations() public view returns (uint256) {
-        uint256 total = 0;
-        for (uint i = 0; i < contributorAddresses.length; i++) {
-            if (contributors[contributorAddresses[i]].isActive) {
-                total += contributors[contributorAddresses[i]].allocation;
-            }
-        }
-        return total;
-    }
-    
-    // Get remaining allocation available
-    function getRemainingAllocation() external view returns (uint256) {
-        return 10000 - getTotalAllocations();
-    }
-    
-    // Get contributor count
+
     function getContributorCount() external view returns (uint256) {
         uint256 count = 0;
         for (uint i = 0; i < contributorAddresses.length; i++) {
@@ -148,5 +133,15 @@ contract RewardPool {
             }
         }
         return count;
+    }
+
+    function removeContributor(address contributor) external onlyOwner {
+        require(contributors[contributor].isActive, "Contributor not active");
+
+        totalAllocations -= contributors[contributor].allocation;
+        contributors[contributor].isActive = false;
+
+        // Note: We don't remove from contributorAddresses array to maintain historical data
+        // The getAllContributors function filters by isActive status
     }
 }
