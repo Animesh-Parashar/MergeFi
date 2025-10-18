@@ -3,12 +3,14 @@ pragma solidity ^0.8.13;
 
 contract RewardPool {
     address public maintainer;
+    address public registry; // MergeFiRegistry contract
     uint256 public totalFund;
     
     struct Contributor {
         address wallet;
-        uint256 allocation; // percentage in basis points (10000 = 100%)
         string githubUsername;
+        uint256 aiScore; // AI model score (0-10000)
+        uint256 contributionCount; // Number of contributions
         bool isActive;
     }
     
@@ -25,8 +27,14 @@ contract RewardPool {
         _;
     }
     
-    constructor(address _maintainer) {
+    modifier onlyRegistry() {
+        require(msg.sender == registry, "Not authorized: Only registry");
+        _;
+    }
+    
+    constructor(address _maintainer, address _registry) {
         maintainer = _maintainer;
+        registry = _registry;
     }
     
     // Set total fund amount (to be transferred via Avail SDK)
@@ -35,31 +43,41 @@ contract RewardPool {
         emit FundSet(_totalFund);
     }
     
-    // Add or update contributor allocation
-    function setContributorAllocation(
+    // Add or update contributor with AI score
+    function setContributor(
         address _contributor, 
-        uint256 _allocation, 
-        string memory _githubUsername
-    ) external onlyMaintainer {
+        string memory _githubUsername,
+        uint256 _aiScore,
+        uint256 _contributionCount
+    ) external onlyRegistry {
         require(_contributor != address(0), "Invalid contributor address");
-        require(_allocation > 0 && _allocation <= 10000, "Allocation must be between 1-10000 basis points");
-        require(getTotalAllocations() - contributors[_contributor].allocation + _allocation <= 10000, "Total allocation exceeds 100%");
+        require(_aiScore <= 10000, "AI score must be between 0-10000");
         
         bool isNewContributor = !contributors[_contributor].isActive;
         
         contributors[_contributor] = Contributor({
             wallet: _contributor,
-            allocation: _allocation,
             githubUsername: _githubUsername,
+            aiScore: _aiScore,
+            contributionCount: _contributionCount,
             isActive: true
         });
         
         if (isNewContributor) {
             contributorAddresses.push(_contributor);
-            emit ContributorAdded(_contributor, _allocation, _githubUsername);
+            emit ContributorAdded(_contributor, _aiScore, _githubUsername);
         } else {
-            emit ContributorUpdated(_contributor, _allocation);
+            emit ContributorUpdated(_contributor, _aiScore);
         }
+    }
+    
+    // Update AI scores (called by AI model through registry)
+    function updateAIScore(address _contributor, uint256 _newScore) external onlyRegistry {
+        require(contributors[_contributor].isActive, "Contributor not found");
+        require(_newScore <= 10000, "AI score must be between 0-10000");
+        
+        contributors[_contributor].aiScore = _newScore;
+        emit ContributorUpdated(_contributor, _newScore);
     }
     
     // Remove contributor
@@ -81,19 +99,35 @@ contract RewardPool {
         emit ContributorRemoved(_contributor);
     }
     
-    // Get contributor's allocated amount in PYUSD
+    // Get contributor's allocated amount based on AI score
     function getContributorAmount(address _contributor) external view returns (uint256) {
         if (!contributors[_contributor].isActive || totalFund == 0) {
             return 0;
         }
-        return (totalFund * contributors[_contributor].allocation) / 10000;
+        
+        uint256 totalScores = getTotalAIScores();
+        if (totalScores == 0) return 0;
+        
+        return (totalFund * contributors[_contributor].aiScore) / totalScores;
+    }
+    
+    // Get total AI scores for calculation
+    function getTotalAIScores() public view returns (uint256) {
+        uint256 total = 0;
+        for (uint i = 0; i < contributorAddresses.length; i++) {
+            if (contributors[contributorAddresses[i]].isActive) {
+                total += contributors[contributorAddresses[i]].aiScore;
+            }
+        }
+        return total;
     }
     
     // Get all active contributors for Avail SDK
     function getAllContributors() external view returns (
         address[] memory addresses,
-        uint256[] memory allocations,
+        uint256[] memory aiScores,
         uint256[] memory amounts,
+        uint256[] memory contributionCounts,
         string[] memory githubUsernames
     ) {
         uint256 activeCount = 0;
@@ -106,37 +140,32 @@ contract RewardPool {
         }
         
         addresses = new address[](activeCount);
-        allocations = new uint256[](activeCount);
+        aiScores = new uint256[](activeCount);
         amounts = new uint256[](activeCount);
+        contributionCounts = new uint256[](activeCount);
         githubUsernames = new string[](activeCount);
         
+        uint256 totalScores = getTotalAIScores();
         uint256 index = 0;
+        
         for (uint i = 0; i < contributorAddresses.length; i++) {
             address addr = contributorAddresses[i];
             if (contributors[addr].isActive) {
                 addresses[index] = addr;
-                allocations[index] = contributors[addr].allocation;
-                amounts[index] = totalFund > 0 ? (totalFund * contributors[addr].allocation) / 10000 : 0;
+                aiScores[index] = contributors[addr].aiScore;
+                amounts[index] = totalScores > 0 ? (totalFund * contributors[addr].aiScore) / totalScores : 0;
+                contributionCounts[index] = contributors[addr].contributionCount;
                 githubUsernames[index] = contributors[addr].githubUsername;
                 index++;
             }
         }
     }
     
-    // Get total allocated percentage
-    function getTotalAllocations() public view returns (uint256) {
-        uint256 total = 0;
-        for (uint i = 0; i < contributorAddresses.length; i++) {
-            if (contributors[contributorAddresses[i]].isActive) {
-                total += contributors[contributorAddresses[i]].allocation;
-            }
-        }
-        return total;
-    }
-    
-    // Get remaining allocation available
-    function getRemainingAllocation() external view returns (uint256) {
-        return 10000 - getTotalAllocations();
+    // Get average AI score
+    function getAverageAIScore() external view returns (uint256) {
+        uint256 activeCount = getContributorCount();
+        if (activeCount == 0) return 0;
+        return getTotalAIScores() / activeCount;
     }
     
     // Get contributor count
