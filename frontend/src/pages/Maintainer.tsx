@@ -94,6 +94,7 @@ export function Maintainer() {
       });
 
       const { user, repositories, stats } = response.data;
+      console.log(response);
 
       // Add default status for repositories (in a real app, this would come from your database)
       const reposWithStatus = repositories.map((repo: Repository) => ({
