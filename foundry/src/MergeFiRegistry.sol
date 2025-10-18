@@ -2,7 +2,6 @@
 pragma solidity ^0.8.13;
 
 import "./RewardPool.sol";
-import "./NFTBadge.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract MergeFiRegistry is Ownable {
@@ -17,18 +16,35 @@ contract MergeFiRegistry is Ownable {
         uint256 createdAt;
     }
     
-    NFTBadge public nftBadge;
+    struct PaymentData {
+        address recipient;
+        uint256 amount;
+        uint256 chainId;
+        string githubUsername;
+        string repoName;
+        uint256 aiScore;
+        uint256 contributionCount;
+    }
+    
     mapping(string => Repo) public repos;
     mapping(address => string[]) public maintainerRepos;
     string[] public allRepos;
     
+    // AI Model integration
+    mapping(address => bool) public authorizedAIModels;
+    
     event RepoRegistered(string repoName, address maintainer, address pool, string githubUrl);
     event RepoVerified(string repoName);
     event FundingUpdated(string repoName, uint256 newAmount);
+    event ContributorScoreUpdated(string repoName, address contributor, uint256 newScore);
+    event AIModelAuthorized(address aiModel, bool authorized);
     
-    constructor() Ownable(msg.sender) {
-        nftBadge = new NFTBadge();
+    modifier onlyAuthorizedAI() {
+        require(authorizedAIModels[msg.sender] || msg.sender == owner(), "Not authorized AI model");
+        _;
     }
+    
+    constructor() Ownable(msg.sender) {}
 
     function registerRepo(string memory repoName, string memory githubUrl) external {
         require(repos[repoName].maintainer == address(0), "Repo already registered");
@@ -36,7 +52,7 @@ contract MergeFiRegistry is Ownable {
         require(bytes(githubUrl).length > 0, "GitHub URL cannot be empty");
         
         // Deploy new pool
-        address pool = address(new RewardPool(msg.sender));
+        address pool = address(new RewardPool(msg.sender, address(this)));
         
         // Store repo info
         repos[repoName] = Repo({
@@ -74,12 +90,12 @@ contract MergeFiRegistry is Ownable {
         emit FundingUpdated(repoName, totalFund);
     }
     
-    // Add contributor to repo pool
+    // Add contributor with initial data (called by maintainer)
     function addContributor(
         string memory repoName, 
         address contributor, 
-        uint256 allocation,
-        string memory githubUsername
+        string memory githubUsername,
+        uint256 contributionCount
     ) external {
         require(repos[repoName].maintainer == msg.sender, "Not authorized: Not repo maintainer");
         require(repos[repoName].verified, "Repo not verified");
@@ -89,13 +105,35 @@ contract MergeFiRegistry is Ownable {
         // Check if this is a new contributor
         bool isNewContributor = !pool.contributors(contributor).isActive;
         
-        pool.setContributorAllocation(contributor, allocation, githubUsername);
+        // Initial AI score is 5000 (50% - neutral score)
+        pool.setContributor(contributor, githubUsername, 5000, contributionCount);
         
         if (isNewContributor) {
             repos[repoName].contributorCount++;
-            // Mint NFT badge for new contributor
-            nftBadge.mintBadge(contributor, repoName, "contributor");
         }
+    }
+    
+    // Update AI scores (called by AI model)
+    function updateContributorScores(
+        string memory repoName,
+        address[] memory contributors,
+        uint256[] memory newScores
+    ) external onlyAuthorizedAI {
+        require(contributors.length == newScores.length, "Arrays length mismatch");
+        require(repos[repoName].pool != address(0), "Repo not found");
+        
+        RewardPool pool = RewardPool(repos[repoName].pool);
+        
+        for (uint i = 0; i < contributors.length; i++) {
+            pool.updateAIScore(contributors[i], newScores[i]);
+            emit ContributorScoreUpdated(repoName, contributors[i], newScores[i]);
+        }
+    }
+    
+    // Authorize AI model addresses
+    function setAIModelAuthorization(address aiModel, bool authorized) external onlyOwner {
+        authorizedAIModels[aiModel] = authorized;
+        emit AIModelAuthorized(aiModel, authorized);
     }
     
     // Get repo details for frontend
@@ -156,21 +194,60 @@ contract MergeFiRegistry is Ownable {
         return verifiedRepos;
     }
     
-    // Get pool data for Avail SDK integration
-    function getPoolDataForAvail(string memory repoName) external view returns (
-        address poolAddress,
+    // Check if payments can be processed
+    function canProcessPayments(string memory repoName) external view returns (bool) {
+        if (!repos[repoName].verified || repos[repoName].totalFunding == 0) {
+            return false;
+        }
+        
+        RewardPool pool = RewardPool(repos[repoName].pool);
+        return pool.getContributorCount() > 0 && pool.getTotalAIScores() > 0;
+    }
+    
+    // Get payment data for Avail SDK (main function for payments)
+    function getPaymentData(string memory repoName, uint256 chainId) external view returns (
         uint256 totalFund,
-        address[] memory contributorAddresses,
-        uint256[] memory allocations,
-        uint256[] memory amounts,
-        string[] memory githubUsernames
+        PaymentData[] memory payments
     ) {
         require(repos[repoName].verified, "Repo not verified");
         
         RewardPool pool = RewardPool(repos[repoName].pool);
-        poolAddress = address(pool);
         totalFund = pool.totalFund();
         
-        (contributorAddresses, allocations, amounts, githubUsernames) = pool.getAllContributors();
+        (
+            address[] memory addresses,
+            uint256[] memory aiScores,
+            uint256[] memory amounts,
+            uint256[] memory contributionCounts,
+            string[] memory githubUsernames
+        ) = pool.getAllContributors();
+        
+        payments = new PaymentData[](addresses.length);
+        
+        for (uint i = 0; i < addresses.length; i++) {
+            payments[i] = PaymentData({
+                recipient: addresses[i],
+                amount: amounts[i],
+                chainId: chainId,
+                githubUsername: githubUsernames[i],
+                repoName: repoName,
+                aiScore: aiScores[i],
+                contributionCount: contributionCounts[i]
+            });
+        }
+    }
+    
+    // Get contributor data for frontend display
+    function getContributorData(string memory repoName) external view returns (
+        address[] memory addresses,
+        uint256[] memory aiScores,
+        uint256[] memory amounts,
+        uint256[] memory contributionCounts,
+        string[] memory githubUsernames
+    ) {
+        require(repos[repoName].pool != address(0), "Repo not found");
+        
+        RewardPool pool = RewardPool(repos[repoName].pool);
+        return pool.getAllContributors();
     }
 }
