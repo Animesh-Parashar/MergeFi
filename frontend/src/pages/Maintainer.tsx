@@ -18,6 +18,7 @@ import {
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
+import ContributorsModal from '../components/ContributorsModal';
 
 interface Repository {
   id: number;
@@ -78,6 +79,11 @@ export function Maintainer() {
   const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
   const [fundAmount, setFundAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [contributorsModal, setContributorsModal] = useState({
+    isOpen: false,
+    owner: '',
+    repo: ''
+  });
   const reposPerPage = 3;
 
   useEffect(() => {
@@ -461,6 +467,17 @@ export function Maintainer() {
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
+                                variant="ghost"
+                                onClick={() => setContributorsModal({
+                                  isOpen: true,
+                                  owner: repo.full_name.split('/')[0],
+                                  repo: repo.full_name.split('/')[1]
+                                })}
+                              >
+                                Contributors ({repo.stats.contributors_count})
+                              </Button>
+                              <Button
+                                size="sm"
                                 variant={repo.isOpenToContributions ? "secondary" : "outline"}
                                 onClick={() => toggleContributionStatus(repo.id)}
                               >
@@ -688,6 +705,14 @@ export function Maintainer() {
           </div>
         </div>
       </Modal>
+
+      {/* Contributors Modal */}
+      <ContributorsModal
+        isOpen={contributorsModal.isOpen}
+        onClose={() => setContributorsModal({ isOpen: false, owner: '', repo: '' })}
+        owner={contributorsModal.owner}
+        repo={contributorsModal.repo}
+      />
     </div>
   );
 }
