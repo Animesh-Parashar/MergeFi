@@ -1,4 +1,4 @@
-import { sdk } from "./avail";
+import { sdk } from "./avail.js";
 
 async function handleBridgeAndExecute(userAddress) {
   const res = await sdk.bridgeAndExecute({
