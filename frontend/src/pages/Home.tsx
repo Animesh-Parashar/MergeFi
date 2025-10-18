@@ -1,8 +1,356 @@
-import { motion } from 'framer-motion';
-import { GitBranch, Coins, Shield, Award } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { GitBranch, Coins, Shield, Award, X } from 'lucide-react';
 import { Card } from '../components/Card';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 export function Home() {
+  const [showTerminal, setShowTerminal] = useState(false);
+  const [terminalLines, setTerminalLines] = useState<string[]>([]);
+  const [currentInput, setCurrentInput] = useState('');
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [currentStep, setCurrentStep] = useState('initial'); // initial, connected, ls, choose
+  const [availableOptions, setAvailableOptions] = useState<string[]>([]);
+  const [showCursor, setShowCursor] = useState(true);
+  const [githubUser, setGithubUser] = useState<any>(null);
+  const [authProcessed, setAuthProcessed] = useState(false); // Add this new state
+  const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+
+  // Cursor blinking effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setShowCursor(prev => !prev);
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Focus input when terminal opens
+  useEffect(() => {
+    if (showTerminal && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [showTerminal]);
+
+  // Check if user is already authenticated on component mount
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  // Listen for OAuth completion message from popup
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Only accept messages from our backend domain
+      if (event.origin !== 'http://localhost:5000') return;
+
+      if (event.data.type === 'GITHUB_AUTH_SUCCESS') {
+        handleAuthSuccess();
+      } else if (event.data.type === 'GITHUB_AUTH_ERROR') {
+        handleAuthError(event.data.error);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/auth/status', {
+        withCredentials: true,
+      });
+
+      if (response.data.authenticated) {
+        setGithubUser(response.data.user);
+        setIsConnected(true);
+
+        // Only show success message if we haven't processed auth yet and terminal is open
+        if (!authProcessed && showTerminal) {
+          setCurrentStep('connected');
+          setTerminalLines(prev => [
+            ...prev,
+            '✅ GitHub connection successful!',
+            `👤 Authenticated as: @${response.data.user.login}`,
+            `📧 Email: ${response.data.user.email || 'Not public'}`,
+            '',
+            '📝 Type "ls" to see available options...',
+            '',
+          ]);
+          setAuthProcessed(true);
+          setIsConnecting(false);
+        }
+      }
+    } catch (error) {
+      // User not authenticated, which is fine
+      console.log('User not authenticated');
+    }
+  };
+
+  const handleGitHubConnect = () => {
+    setShowTerminal(true);
+    setAuthProcessed(false); // Reset auth processed state
+    setTerminalLines([
+      'MergeFi Terminal v1.0.0',
+      'Initializing GitHub OAuth connection...',
+      '',
+    ]);
+
+    setTimeout(() => {
+      setIsConnecting(true);
+      setTerminalLines(prev => [
+        ...prev,
+        '🔗 Connecting to GitHub...',
+        '🔐 Opening authentication window...',
+      ]);
+
+      // Open GitHub OAuth in popup
+      const popup = window.open(
+        'http://localhost:5000/auth/github',
+        'github-oauth',
+        'width=600,height=700,scrollbars=yes,resizable=yes'
+      );
+
+      // Poll to check if popup is closed
+      const checkClosed = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(checkClosed);
+          // Check auth status after popup closes
+          setTimeout(() => {
+            if (!authProcessed) { // Only check if we haven't processed auth yet
+              checkAuthStatus().then(() => {
+                if (!isConnected && !authProcessed) {
+                  handleAuthError('Authentication was cancelled or failed');
+                }
+              });
+            }
+          }, 1000);
+        }
+      }, 1000);
+    }, 1000);
+  };
+
+  const handleAuthSuccess = async () => {
+    // Prevent duplicate processing
+    if (authProcessed) return;
+
+    try {
+      // Fetch user data
+      const response = await axios.get('http://localhost:5000/api/auth/user', {
+        withCredentials: true,
+      });
+
+      const user = response.data;
+      setGithubUser(user);
+      setIsConnecting(false);
+      setIsConnected(true);
+      setCurrentStep('connected');
+      setAuthProcessed(true); // Mark as processed
+
+      setTerminalLines(prev => [
+        ...prev,
+        '✅ GitHub connection successful!',
+        `👤 Authenticated as: @${user.login}`,
+        `📧 Email: ${user.email || 'Not public'}`,
+        '',
+        '📝 Type "ls" to see available options...',
+        '',
+      ]);
+    } catch (error) {
+      handleAuthError('Failed to fetch user data');
+    }
+  };
+
+  const handleAuthError = (error: string) => {
+    setIsConnecting(false);
+    setIsConnected(false);
+    setAuthProcessed(true); // Mark as processed to prevent further checks
+    setTerminalLines(prev => [
+      ...prev,
+      `❌ Authentication failed: ${error}`,
+      '',
+      '💡 You can try connecting again by typing "retry"',
+      '',
+    ]);
+  };
+
+  const handleCommand = (command: string) => {
+    const cmd = command.trim().toLowerCase();
+    const promptLine = `user@mergefi:~$ ${command}`;
+
+    setTerminalLines(prev => [...prev, promptLine]);
+    setCurrentInput('');
+
+    switch (currentStep) {
+      case 'connected':
+        if (cmd === 'ls') {
+          setCurrentStep('ls');
+          setAvailableOptions(['Contributor', 'Maintainer']);
+          setTerminalLines(prev => [
+            ...prev,
+            '',
+            '📁 Available roles:',
+            '',
+            '  📝 Contributor  - Earn rewards for your contributions',
+            '  🔧 Maintainer   - Manage repositories and reward pools',
+            '',
+            '💡 Type a role name to continue (Contributor/Maintainer)...',
+            '',
+          ]);
+        } else if (cmd === 'help') {
+          setTerminalLines(prev => [
+            ...prev,
+            '',
+            'Available commands:',
+            '  ls      - List available options',
+            '  help    - Show this help message',
+            '  clear   - Clear terminal',
+            '  whoami  - Show current user info',
+            '',
+          ]);
+        } else if (cmd === 'whoami') {
+          setTerminalLines(prev => [
+            ...prev,
+            '',
+            `👤 GitHub User: @${githubUser?.login}`,
+            `📧 Email: ${githubUser?.email || 'Not public'}`,
+            `🏢 Company: ${githubUser?.company || 'Not specified'}`,
+            `📍 Location: ${githubUser?.location || 'Not specified'}`,
+            `⭐ Public Repos: ${githubUser?.public_repos || 0}`,
+            `👥 Followers: ${githubUser?.followers || 0}`,
+            '',
+          ]);
+        } else if (cmd === 'clear') {
+          setTerminalLines([
+            'MergeFi Terminal v1.0.0',
+            '✅ GitHub connection successful!',
+            `👤 Authenticated as: @${githubUser?.login}`,
+            '',
+            '📝 Type "ls" to see available options...',
+            '',
+          ]);
+        } else {
+          setTerminalLines(prev => [
+            ...prev,
+            `Command '${command}' not found. Type 'help' for available commands.`,
+            '',
+          ]);
+        }
+        break;
+
+      case 'ls':
+        if (cmd === 'contributor') {
+          setCurrentStep('choose');
+          setTerminalLines(prev => [
+            ...prev,
+            '',
+            '🎯 Redirecting to Contributor Dashboard...',
+            '⚡ Setting up your contributor environment...',
+            '',
+          ]);
+          setTimeout(() => {
+            setShowTerminal(false);
+            navigate('/contributor');
+          }, 2000);
+        } else if (cmd === 'maintainer') {
+          setCurrentStep('choose');
+          setTerminalLines(prev => [
+            ...prev,
+            '',
+            '🔧 Redirecting to Maintainer Dashboard...',
+            '⚡ Loading repository management tools...',
+            '',
+          ]);
+          setTimeout(() => {
+            setShowTerminal(false);
+            navigate('/maintainer');
+          }, 2000);
+        } else if (cmd === 'ls') {
+          setTerminalLines(prev => [
+            ...prev,
+            '',
+            '📁 Available roles:',
+            '',
+            '  📝 Contributor  - Earn rewards for your contributions',
+            '  🔧 Maintainer   - Manage repositories and reward pools',
+            '',
+            '💡 Type a role name to continue (Contributor/Maintainer)...',
+            '',
+          ]);
+        } else if (cmd === 'help') {
+          setTerminalLines(prev => [
+            ...prev,
+            '',
+            'Available commands:',
+            '  Contributor - Access contributor dashboard',
+            '  Maintainer  - Access maintainer dashboard',
+            '  ls          - List available options',
+            '  help        - Show this help message',
+            '  clear       - Clear terminal',
+            '  back        - Go back to main menu',
+            '',
+          ]);
+        } else if (cmd === 'back') {
+          setCurrentStep('connected');
+          setTerminalLines(prev => [
+            ...prev,
+            '',
+            '📝 Type "ls" to see available options...',
+            '',
+          ]);
+        } else if (cmd === 'clear') {
+          setTerminalLines([
+            'MergeFi Terminal v1.0.0',
+            '✅ GitHub connection successful!',
+            `👤 Authenticated as: @${githubUser?.login}`,
+            '',
+            '📁 Available roles:',
+            '',
+            '  📝 Contributor  - Earn rewards for your contributions',
+            '  🔧 Maintainer   - Manage repositories and reward pools',
+            '',
+            '💡 Type a role name to continue (Contributor/Maintainer)...',
+            '',
+          ]);
+        } else {
+          setTerminalLines(prev => [
+            ...prev,
+            `Role '${command}' not found. Available: Contributor, Maintainer`,
+            '',
+          ]);
+        }
+        break;
+
+      default:
+        if (cmd === 'retry') {
+          handleGitHubConnect();
+        } else {
+          setTerminalLines(prev => [
+            ...prev,
+            'Please authenticate with GitHub first or type "retry" to try again.',
+            '',
+          ]);
+        }
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && currentInput.trim() && !isConnecting && currentStep !== 'choose') {
+      handleCommand(currentInput);
+    }
+  };
+
+  const closeTerminal = () => {
+    setShowTerminal(false);
+    setTerminalLines([]);
+    setCurrentInput('');
+    setIsConnecting(false);
+    setAuthProcessed(false); // Reset auth processed state when closing
+    // Don't reset isConnected and githubUser as they should persist
+    setCurrentStep(isConnected ? 'connected' : 'initial');
+    setAvailableOptions([]);
+  };
 
   return (
     <div className="min-h-screen bg-black text-white font-mono">
@@ -26,7 +374,7 @@ export function Home() {
           >
             <div className="mb-8">
               <pre className="text-white text-sm lg:text-base font-bold leading-none inline-block">
-{`
+                {`
  ███╗   ███╗███████╗██████╗  ██████╗ ███████╗███████╗██╗
  ████╗ ████║██╔════╝██╔══██╗██╔════╝ ██╔════╝██╔════╝██║
  ██╔████╔██║█████╗  ██████╔╝██║  ███╗█████╗  █████╗  ██║
@@ -50,8 +398,8 @@ export function Home() {
             </p>
 
             <div className="flex justify-center items-center">
-              <button 
-                onClick={() => window.location.href = 'http://localhost:5000/auth/github'}
+              <button
+                onClick={handleGitHubConnect}
                 className="group relative"
               >
                 <div className="absolute inset-0 border-2 border-dashed border-gray-600 bg-gray-900/20 transition-all duration-300 group-hover:border-gray-400 group-hover:shadow-lg group-hover:shadow-white/10"></div>
@@ -101,6 +449,139 @@ export function Home() {
         </div>
       </section>
 
+      {/* Terminal Modal */}
+      <AnimatePresence>
+        {showTerminal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={closeTerminal}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-black border border-gray-700 shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden"
+            >
+              {/* Terminal Header */}
+              <div className="flex items-center justify-between px-6 py-4 bg-gray-900 border-b border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full cursor-pointer hover:bg-red-400" onClick={closeTerminal}></div>
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  </div>
+                  <span className="text-gray-400 text-sm">mergefi-connect</span>
+                </div>
+                <button
+                  onClick={closeTerminal}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Terminal Content */}
+              <div className="p-6 h-96 overflow-y-auto bg-black font-mono text-sm">
+                <div className="space-y-1">
+                  {terminalLines.map((line, index) => (
+                    <div
+                      key={index}
+                      className={`${line.startsWith('user@mergefi')
+                        ? 'text-white'
+                        : line.includes('✅') || line.includes('🎯') || line.includes('🔧')
+                          ? 'text-green-400'
+                          : line.includes('🔗') || line.includes('🔐') || line.includes('⚡')
+                            ? 'text-blue-400'
+                            : line.includes('📝') || line.includes('💡')
+                              ? 'text-yellow-400'
+                              : line.includes('👤') || line.includes('📁')
+                                ? 'text-cyan-400'
+                                : line.startsWith('Command') || line.startsWith('Role')
+                                  ? 'text-red-400'
+                                  : 'text-gray-300'
+                        }`}
+                    >
+                      {line}
+                    </div>
+                  ))}
+
+                  {/* Loading indicator */}
+                  {isConnecting && (
+                    <div className="flex items-center gap-2 text-blue-400">
+                      <div className="flex gap-1">
+                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></div>
+                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                      <span>Connecting...</span>
+                    </div>
+                  )}
+
+                  {/* Input line */}
+                  {!isConnecting && isConnected && currentStep !== 'choose' && (
+                    <div className="flex items-center text-white">
+                      <span className="text-green-400">user@mergefi</span>
+                      <span className="text-gray-500">:</span>
+                      <span className="text-blue-400">~</span>
+                      <span className="text-white">$ </span>
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={currentInput}
+                        onChange={(e) => setCurrentInput(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        className="bg-transparent border-none outline-none text-white flex-1 font-mono"
+                        autoComplete="off"
+                        spellCheck="false"
+                      />
+                      <span className={`text-white ${showCursor ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
+                        █
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Terminal Footer */}
+              <div className="px-6 py-3 bg-gray-900 border-t border-gray-700 text-xs text-gray-500">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <span>Status: {isConnected ? 'Connected' : 'Connecting...'}</span>
+                    {isConnected && currentStep === 'connected' && (
+                      <span className="text-yellow-400">Type "ls" to continue</span>
+                    )}
+                    {currentStep === 'ls' && (
+                      <span className="text-yellow-400">Type "Contributor" or "Maintainer"</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>Press Esc to close</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Escape key handler */}
+      {showTerminal && (
+        <div
+          className="fixed inset-0 pointer-events-none"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              closeTerminal();
+            }
+          }}
+          tabIndex={0}
+        />
+      )}
+
+      {/* Rest of the existing sections */}
       <section className="px-6 py-20 lg:px-12 border-t border-gray-900">
         <div className="max-w-7xl mx-auto">
           <motion.div
