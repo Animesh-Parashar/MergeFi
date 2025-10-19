@@ -1,30 +1,62 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, User, Users, Shield, Wallet } from 'lucide-react';
-import {
-  useConnect,
-  useDisconnect,
-  useAccount,
-} from 'wagmi'
+import { Home, User, Users, Shield, ChevronDown, Wallet, Copy, Check } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
+import { sepolia, arbitrumSepolia } from 'wagmi/chains';
+import { useWalletStore } from '../store/walletStore';
+
+const PYUSD_SEPOLIA = '0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9';
+const USDC_SEPOLIA = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
+const PYUSD_ARBITRUM = '0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1';
+const USDC_ARBITRUM = '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d';
+
 
 export function Navbar() {
   const location = useLocation();
-  
-  // Wagmi hooks
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [addressCopied, setAddressCopied] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const { address, isConnected, chainId } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
-  const { address, isConnected } = useAccount();
 
-  const handleConnect = () => {
-    const connector = connectors[0]; // Use first available connector (injected)
-    if (connector) {
-      connect({ connector });
-    }
-  };
+  // Sync with global store
+  const setWalletState = useWalletStore((state) => state.setWalletState);
 
-  const handleDisconnect = () => {
-    disconnect();
-  };
+  useEffect(() => {
+    setWalletState({
+      isConnected,
+      address: address || null,
+      chainId: chainId || null,
+    });
+  }, [isConnected, address, chainId, setWalletState]);
+
+  // Token balances
+  const { data: pyusdSepoliaBalance } = useBalance({
+    address,
+    token: PYUSD_SEPOLIA,
+    chainId: sepolia.id,
+  });
+
+  const { data: usdcSepoliaBalance } = useBalance({
+    address,
+    token: USDC_SEPOLIA,
+    chainId: sepolia.id,
+  });
+
+  const { data: pyusdArbitrumBalance } = useBalance({
+    address,
+    token: PYUSD_ARBITRUM,
+    chainId: arbitrumSepolia.id,
+  });
+
+  const { data: usdcArbitrumBalance } = useBalance({
+    address,
+    token: USDC_ARBITRUM,
+    chainId: arbitrumSepolia.id,
+  });
 
   const links = [
     { path: '/', label: 'Home', icon: Home },
@@ -32,6 +64,58 @@ export function Navbar() {
     { path: '/contributor', label: 'Contributor', icon: Users },
     { path: '/owner', label: 'Owner', icon: Shield },
   ];
+
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const formatAddressDropdown = (address: string) => {
+    return `${address.slice(0, 8)}...${address.slice(-8)}`;
+  };
+
+  const formatBalance = (balance: any, symbol: string) => {
+    if (!balance) return `0 ${symbol}`;
+    const formatted = parseFloat(balance.formatted).toFixed(2);
+    return `${formatted} ${symbol}`;
+  };
+
+  const copyAddressToClipboard = async () => {
+    if (!address) return;
+
+    try {
+      await navigator.clipboard.writeText(address);
+      setAddressCopied(true);
+      setTimeout(() => setAddressCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy address:', err);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleWalletConnect = () => {
+    if (isConnected) {
+      setShowDropdown(!showDropdown);
+    } else {
+      // Connect with MetaMask (first connector)
+      const metamaskConnector = connectors.find(connector => connector.name === 'MetaMask');
+      if (metamaskConnector) {
+        connect({ connector: metamaskConnector });
+      }
+    }
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-gray-900 bg-black/95 backdrop-blur-sm">
@@ -44,7 +128,7 @@ export function Navbar() {
               <div className="w-3 h-3 bg-green-500"></div>
             </div>
             <span className="text-white font-bold text-xl font-mono">
-              MERGEFI
+              MergeFi
             </span>
           </Link>
 
@@ -59,9 +143,8 @@ export function Navbar() {
                   className="relative group"
                 >
                   <div
-                    className={`flex items-center gap-2 transition-colors ${
-                      isActive ? 'text-white' : 'text-gray-400 hover:text-white'
-                    }`}
+                    className={`flex items-center gap-2 transition-colors ${isActive ? 'text-white' : 'text-gray-400 hover:text-white'
+                      }`}
                   >
                     <Icon className="w-4 h-4" />
                     <span className="font-mono text-sm">{link.label}</span>
@@ -78,28 +161,126 @@ export function Navbar() {
             })}
           </div>
 
-          {/* MetaMask Connect Button */}
-          {!isConnected ? (
-            <motion.button
-              onClick={handleConnect}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-black font-mono text-sm rounded-lg hover:bg-gray-100 transition-colors"
+          {/* Wallet Connection */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={handleWalletConnect}
+              className="group relative"
             >
-              <Wallet className="w-4 h-4" />
-              Connect MetaMask
-            </motion.button>
-          ) : (
-            <motion.button
-              onClick={handleDisconnect}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white font-mono text-sm rounded-lg border border-gray-600 hover:bg-gray-700 transition-colors"
-            >
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}</span>
-            </motion.button>
-          )}
+              <div className="absolute inset-0 border-2 border-dashed border-gray-600 bg-gray-900/20 transition-all duration-300 group-hover:border-gray-400 group-hover:shadow-lg group-hover:shadow-white/10"></div>
+              <div className="relative border-2 border-dashed border-gray-400 bg-transparent text-white font-bold px-4 py-2 text-sm transition-all duration-300 group-hover:border-gray-300 group-hover:bg-gray-900/30 transform translate-x-0.5 translate-y-0.5 group-hover:translate-x-0 group-hover:translate-y-0">
+                <div className="flex items-center gap-2">
+                  <Wallet className="w-4 h-4" />
+                  <span>
+                    {isConnected && address ? formatAddress(address) : 'Connect Wallet'}
+                  </span>
+                  {isConnected && <ChevronDown className="w-3 h-3" />}
+                </div>
+              </div>
+            </button>
+
+            {/* Dropdown */}
+            {showDropdown && isConnected && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute right-0 top-full mt-2 w-80 bg-black border border-gray-700 shadow-2xl z-50"
+              >
+                <div className="p-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-800">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-gray-400" />
+                      <span className="text-white font-mono text-sm">Wallet</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        disconnect();
+                        setShowDropdown(false);
+                      }}
+                      className="text-xs text-gray-400 hover:text-white transition-colors"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+
+                  {/* Address */}
+                  <div className="mb-4">
+                    <div className="text-xs text-gray-400 mb-1">Address</div>
+                    <div className="flex items-center justify-between bg-gray-900/50 border border-gray-800 px-3 py-2 rounded">
+                      <span className="font-mono text-sm text-white">
+                        {address && formatAddressDropdown(address)}
+                      </span>
+                      <button
+                        onClick={copyAddressToClipboard}
+                        className="ml-2 text-gray-400 hover:text-white transition-colors"
+                        title="Copy address"
+                      >
+                        {addressCopied ? (
+                          <Check className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Balances */}
+                  <div className="space-y-4">
+                    {/* Sepolia Testnet */}
+                    <div>
+                      <div className="text-xs text-gray-400 mb-2 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        Sepolia Testnet
+                      </div>
+                      <div className="space-y-2 ml-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-300">PyUSD</span>
+                          <span className="text-sm font-mono text-white">
+                            {formatBalance(pyusdSepoliaBalance, 'PyUSD')}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-300">USDC</span>
+                          <span className="text-sm font-mono text-white">
+                            {formatBalance(usdcSepoliaBalance, 'USDC')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Arbitrum Sepolia */}
+                    <div>
+                      <div className="text-xs text-gray-400 mb-2 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                        Arbitrum Sepolia
+                      </div>
+                      <div className="space-y-2 ml-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-300">PyUSD</span>
+                          <span className="text-sm font-mono text-white">
+                            {formatBalance(pyusdArbitrumBalance, 'PyUSD')}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-300">USDC</span>
+                          <span className="text-sm font-mono text-white">
+                            {formatBalance(usdcArbitrumBalance, 'USDC')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="mt-4 pt-3 border-t border-gray-800 text-xs text-gray-500 text-center">
+                    Click outside to close
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </div>
         </div>
       </div>
     </nav>

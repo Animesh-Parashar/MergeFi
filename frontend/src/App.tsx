@@ -3,6 +3,8 @@ import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './wagmiconfig';
 import { Navbar } from './components/Navbar';
+import { NexusProvider } from '@avail-project/nexus-widgets';
+import { AppWagmiProvider } from './providers/WagmiProvider';
 import { Home } from './pages/Home';
 import { Maintainer } from './pages/Maintainer';
 import { Contributor } from './pages/Contributor';
@@ -12,9 +14,14 @@ const queryClient = new QueryClient();
 
 function App() {
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+    <AppWagmiProvider>
+      <BrowserRouter>
+        <NexusProvider
+          config={{
+            debug: false, // true to view debug logs
+            network: 'testnet', // "mainnet" (default) or "testnet"
+          }}
+        >
           <div className="min-h-screen bg-black">
             <Navbar />
             <div className="pt-16">
@@ -26,9 +33,9 @@ function App() {
               </Routes>
             </div>
           </div>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </WagmiProvider>
+        </NexusProvider>
+      </BrowserRouter>
+    </AppWagmiProvider>
   );
 }
 

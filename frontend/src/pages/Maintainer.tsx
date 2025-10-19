@@ -19,6 +19,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import ContributorsModal from '../components/ContributorsModal';
+import { CrossChainPayment } from '../components/CrossChainPayment';
 
 interface Repository {
   id: number;
@@ -84,6 +85,9 @@ export function Maintainer() {
     owner: '',
     repo: ''
   });
+  const [showCrossChainModal, setShowCrossChainModal] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const reposPerPage = 3;
 
   useEffect(() => {
@@ -225,6 +229,26 @@ export function Maintainer() {
     }
   };
 
+  const handleCrossChainPayment = (transaction: any) => {
+    if (isProcessingPayment) return; // Prevent multiple clicks
+
+    setSelectedTransaction(transaction);
+    setShowCrossChainModal(true);
+    setIsProcessingPayment(true);
+  };
+
+  const handlePaymentComplete = (result: any) => {
+    console.log('Payment completed:', result);
+    setIsProcessingPayment(false);
+    // You might want to call an API to update the transaction status
+  };
+
+  const handleCrossChainModalClose = () => {
+    setShowCrossChainModal(false);
+    setIsProcessingPayment(false);
+    setSelectedTransaction(null);
+  };
+
   // Pagination calculations
   const totalPages = Math.ceil(repositories.length / reposPerPage);
   const startIndex = (currentPage - 1) * reposPerPage;
@@ -243,7 +267,7 @@ export function Maintainer() {
   const pendingTransactions = [
     {
       id: 1,
-      contributor: 'alice.eth',
+      contributor: '0x484826732d75d6A8018bFAD3468Bd84f64614268',
       pr: '#234',
       repo: repositories[0]?.name || 'awesome-blockchain',
       amount: 250,
@@ -591,7 +615,7 @@ export function Maintainer() {
                 transition={{ delay: index * 0.1 }}
               >
                 <Card>
-                  <div className="grid md:grid-cols-5 gap-4 items-center">
+                  <div className="grid md:grid-cols-6 gap-4 items-center">
                     <div>
                       <div className="text-sm text-gray-400">Contributor</div>
                       <div className="font-bold">{tx.contributor}</div>
@@ -613,17 +637,24 @@ export function Maintainer() {
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="md:col-span-2 flex gap-3">
                       <Button
                         size="sm"
                         variant="secondary"
                         onClick={() => setShowApproveModal(true)}
-                        className="flex-1"
+                        className="flex-1 min-w-0"
                       >
-                        <CheckCircle className="w-4 h-4" />
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        Approve
                       </Button>
-                      <Button size="sm" variant="outline" className="flex-1">
-                        <XCircle className="w-4 h-4" />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCrossChainPayment(tx)}
+                        disabled={isProcessingPayment}
+                        className="flex-1 min-w-0 whitespace-nowrap"
+                      >
+                        {isProcessingPayment ? 'Processing...' : 'Cross-Chain Pay'}
                       </Button>
                     </div>
                   </div>
@@ -712,6 +743,15 @@ export function Maintainer() {
         onClose={() => setContributorsModal({ isOpen: false, owner: '', repo: '' })}
         owner={contributorsModal.owner}
         repo={contributorsModal.repo}
+      />
+
+      {/* Cross-Chain Payment Modal - Updated */}
+      <CrossChainPayment
+        isOpen={showCrossChainModal}
+        onClose={handleCrossChainModalClose}
+        recipient={selectedTransaction?.contributor || ''}
+        suggestedAmount={selectedTransaction?.amount || 0}
+        onPaymentComplete={handlePaymentComplete}
       />
     </div>
   );
