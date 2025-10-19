@@ -16,7 +16,7 @@ export const config = createConfig({
     ],
     transports: {
         [sepolia.id]: http('https://eth-sepolia.g.alchemy.com/v2/klloPedupe3EmhcjwvrMm'),
-        [arbitrumSepolia.id]: http('https://arb-sepolia.g.alchemy.com/v2/klloPedupe3EmhcjwvrMm'),
+        [arbitrumSepolia.id]: http('https://arb-sepolia.g.alchemy.com/v2/G3cXmIqjdRfdYTrWB7To2'),
     },
 })
 

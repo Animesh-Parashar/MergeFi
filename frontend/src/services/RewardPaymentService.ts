@@ -66,9 +66,11 @@ const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     421614: {
         chainId: 421614,
         rpcUrls: [
-            // 'https://arb-sepolia.g.alchemy.com/v2/klloPedupe3EmhcjwvrMm',
-            'https://arb-sepolia.g.alchemy.com/v2/G3cXmIqjdRfdYTrWB7To2',
-
+            'https://sepolia-rollup.arbitrum.io/rpc', // Official public RPC
+            'https://arbitrum-sepolia.blockpi.network/v1/rpc/public',
+            'https://arbitrum-sepolia-rpc.publicnode.com',
+            'https://arbitrum-sepolia.gateway.tenderly.co',
+            'https://arb-sepolia.g.alchemy.com/v2/G3cXmIqjdRfdYTrWB7To2', // Keep as fallback
         ],
         routerAddress: '0x109c3870587220F9dee003B7089E3cb33218D8FB',
         pyusdAddress: '0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1',
