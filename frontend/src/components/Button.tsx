@@ -1,19 +1,19 @@
-import { ButtonHTMLAttributes, ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { ReactNode, forwardRef } from 'react';
+import { motion, HTMLMotionProps } from 'framer-motion';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   children: ReactNode;
 }
 
-export function Button({
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   variant = 'primary',
   size = 'md',
   children,
   className = '',
   ...props
-}: ButtonProps) {
+}, ref) => {
   const baseStyles = 'font-mono font-medium transition-all duration-300 relative overflow-hidden';
 
   const variants = {
@@ -31,6 +31,7 @@ export function Button({
 
   return (
     <motion.button
+      ref={ref}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
@@ -39,4 +40,6 @@ export function Button({
       {children}
     </motion.button>
   );
-}
+});
+
+Button.displayName = 'Button';
