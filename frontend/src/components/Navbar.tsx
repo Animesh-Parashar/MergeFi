@@ -42,7 +42,7 @@ export function Navbar() {
     try {
       console.log('Sending user data:', {
         github_username: githubUsername,
-        wallet_address: walletAddress,
+        walletaddress: walletAddress,
         chain: chainId
       });
 
@@ -53,7 +53,7 @@ export function Navbar() {
         },
         body: JSON.stringify({
           github_username: githubUsername,
-          wallet_address: walletAddress,
+          walletaddress: walletAddress,
           chain: chainId
         }),
       });
