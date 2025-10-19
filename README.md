@@ -5,7 +5,7 @@
 **MergiFi** is a decentralized application (DApp) that empowers maintainers to create reward pools for their repositories and pay contributors for high-quality pull requests (PRs).
 Payments, powered by **AI recommendations** and **maintainer approval**, are distributed in **PYUSD** with cross-chain support through **Avail**.
 
-Contributors are rewarded not only financially — they also earn **NFT badges** for their contributions and merges, which appear publicly on the **Merged PRs Page**.
+Contributors are rewarded not only financially, they also earn **NFT badges** for their contributions and merges, which appear publicly on the **Merged PRs Page**.
 
 ---
 
