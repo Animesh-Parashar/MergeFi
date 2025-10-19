@@ -16,6 +16,7 @@ export function Navbar() {
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
   const [addressCopied, setAddressCopied] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { address, isConnected, chainId } = useAccount();
@@ -32,6 +33,82 @@ export function Navbar() {
       chainId: chainId || null,
     });
   }, [isConnected, address, chainId, setWalletState]);
+
+
+
+  // API call function to send user data
+  const sendUserData = async (walletAddress: string, chainId: number, githubUsername: string = 'demo_user') => {
+    setIsSyncing(true);
+    try {
+      console.log('Sending user data:', {
+        github_username: githubUsername,
+        wallet_address: walletAddress,
+        chain: chainId
+      });
+
+      const response = await fetch('http://localhost:5000/api/set-user-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          github_username: githubUsername,
+          wallet_address: walletAddress,
+          chain: chainId
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ User data saved successfully:', result);
+      } else {
+        const error = await response.json();
+        console.error('❌ Failed to save user data:', error);
+      }
+    } catch (error) {
+      console.error('❌ Error sending user data:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Fetch GitHub username from API using cookie token
+  const fetchGithubUsername = async (): Promise<string> => {
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/user', {
+        credentials: 'include' // Include cookies
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('✅ Fetched GitHub user:', userData.login);
+        return userData.login; // GitHub username is in 'login' field
+      } else {
+        console.log('❌ Not authenticated or no GitHub token');
+        return 'demo_user';
+      }
+    } catch (error) {
+      console.error('❌ Error fetching GitHub user:', error);
+      return 'demo_user';
+    }
+  };
+
+  // Send user data when wallet connects or address/chain changes
+  useEffect(() => {
+    if (isConnected && address && chainId) {
+      const sendData = async () => {
+        const githubUsername = await fetchGithubUsername();
+        console.log('🔄 Wallet state changed - sending user data:', {
+          address: formatAddress(address),
+          chainId,
+          githubUsername
+        });
+        sendUserData(address, chainId, githubUsername);
+      };
+      
+      sendData();
+    }
+  }, [isConnected, address, chainId]);
 
   // Token balances
   const { data: pyusdSepoliaBalance } = useBalance({
@@ -174,6 +251,9 @@ export function Navbar() {
                   <span>
                     {isConnected && address ? formatAddress(address) : 'Connect Wallet'}
                   </span>
+                  {isSyncing && (
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  )}
                   {isConnected && <ChevronDown className="w-3 h-3" />}
                 </div>
               </div>
@@ -225,6 +305,8 @@ export function Navbar() {
                       </button>
                     </div>
                   </div>
+
+
 
                   {/* Balances */}
                   <div className="space-y-4">
