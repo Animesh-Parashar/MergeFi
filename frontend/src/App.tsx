@@ -1,4 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { WagmiProvider } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { config } from './wagmiconfig';
 import { Navbar } from './components/Navbar';
 import { NexusProvider } from '@avail-project/nexus-widgets';
 import { AppWagmiProvider } from './providers/WagmiProvider';
@@ -6,6 +9,8 @@ import { Home } from './pages/Home';
 import { Maintainer } from './pages/Maintainer';
 import { Contributor } from './pages/Contributor';
 import { Owner } from './pages/Owner';
+
+const queryClient = new QueryClient();
 
 function App() {
   return (
