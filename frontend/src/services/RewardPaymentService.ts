@@ -89,11 +89,12 @@ const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         chainId: 421614,
         name: 'Arbitrum Sepolia',
         rpcUrls: [
+            'https://arb-sepolia.g.alchemy.com/v2/G3cXmIqjdRfdYTrWB7To2',
             'https://sepolia-rollup.arbitrum.io/rpc', // Official public RPC
             'https://arbitrum-sepolia.blockpi.network/v1/rpc/public',
             'https://arbitrum-sepolia-rpc.publicnode.com',
             'https://arbitrum-sepolia.gateway.tenderly.co',
-            'https://arb-sepolia.g.alchemy.com/v2/G3cXmIqjdRfdYTrWB7To2', // Keep as fallback
+            // Keep as fallback
         ],
         routerAddress: '0x109c3870587220F9dee003B7089E3cb33218D8FB',
         pyusdAddress: '0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1',
@@ -131,10 +132,11 @@ export class RewardPaymentService {
     private isInitialized: boolean = false;
 
     constructor() {
-        this.sdk = new NexusSDK({ network: 'testnet'  });
+        this.sdk = new NexusSDK({ network: 'testnet' });
     }
 
-    async initNexus(provider: any) {
+    // Remove provider parameter - we'll get it from window.ethereum when needed
+    async initNexus() {
         if (this.isInitialized) {
             console.log('SDK already initialized');
             return;
@@ -142,15 +144,30 @@ export class RewardPaymentService {
 
         try {
             console.log('Initializing Nexus SDK...');
-            this.provider = provider;
 
-            // Get signer first
-            const ethersProvider = new ethers.BrowserProvider(provider);
+            // Check if wallet is connected via window.ethereum
+            if (!window.ethereum) {
+                throw new Error('No Ethereum provider found');
+            }
+
+            // Check if already connected (don't request connection)
+            const accounts = await window.ethereum.request({
+                method: 'eth_accounts'
+            });
+
+            if (!accounts || accounts.length === 0) {
+                throw new Error('Wallet not connected');
+            }
+
+            this.provider = window.ethereum;
+
+            // Get signer
+            const ethersProvider = new ethers.BrowserProvider(this.provider);
             this.signer = await ethersProvider.getSigner();
             console.log('Signer obtained:', await this.signer.getAddress());
 
-            // Initialize SDK
-            await this.sdk.initialize(provider);
+            // Initialize SDK WITHOUT triggering connection
+            await this.sdk.initialize(this.provider);
             this.isInitialized = true;
 
             this.setupEventListeners();
@@ -158,7 +175,6 @@ export class RewardPaymentService {
         } catch (error: any) {
             console.error('Failed to initialize Nexus SDK:', error);
             this.isInitialized = false;
-            // Throw error so caller knows initialization failed
             throw new Error(`SDK initialization failed: ${error.message}`);
         }
     }
@@ -350,7 +366,7 @@ export class RewardPaymentService {
             // First check if contract exists
             const provider = this.signer.provider;
             if (!provider) throw new Error('Provider not available');
-            
+
             const code = await provider.getCode(tokenAddress);
             if (code === '0x') {
                 throw new Error(`${tokenSymbol} contract does not exist at ${tokenAddress}`);
@@ -368,7 +384,7 @@ export class RewardPaymentService {
                 console.log(`✅ Current ${tokenSymbol} allowance:`, currentAllowance.toString());
             } catch (error: any) {
                 console.error(`❌ Failed to check ${tokenSymbol} allowance:`, error);
-                
+
                 // For proxy contracts, try calling with static call
                 try {
                     console.log('🔄 Retrying with static call...');
@@ -388,59 +404,68 @@ export class RewardPaymentService {
             }
 
             if (currentAllowance < amountWei) {
-            console.log(`🔓 Approving ${tokenSymbol} spending...`);
-            this.progressCallback?.({
-                step: 'approval',
-                message: `Approving ${tokenSymbol} spending`
-            });
+                console.log(`🔓 Approving ${tokenSymbol} spending...`);
+                this.progressCallback?.({
+                    step: 'approval',
+                    message: `Approving ${tokenSymbol} spending`
+                });
 
-            // Approve spending
-            const approveTx = await tokenContract.approve(spenderAddress, amountWei);
-            await approveTx.wait();
+                // Approve spending
+                const approveTx = await tokenContract.approve(spenderAddress, amountWei);
+                await approveTx.wait();
 
-            console.log(`✅ ${tokenSymbol} approval complete:`, approveTx.hash);
-            this.progressCallback?.({
-                step: 'approval',
-                message: `${tokenSymbol} approval completed`,
-                txHash: approveTx.hash
-            });
+                console.log(`✅ ${tokenSymbol} approval complete:`, approveTx.hash);
+                this.progressCallback?.({
+                    step: 'approval',
+                    message: `${tokenSymbol} approval completed`,
+                    txHash: approveTx.hash
+                });
 
-            return approveTx.hash;
-        }
+                return approveTx.hash;
+            }
 
             console.log(`✅ ${tokenSymbol} already approved`);
             return null; // No approval needed
-            
+
         } catch (error: any) {
             console.error(`❌ Token approval process failed for ${tokenSymbol}:`, error);
             throw error;
         }
     }
 
+    /**
+     * Get source chain config based on current chain
+     */
+    private getSourceChainConfig(currentChainId: number): ChainConfig {
+        const config = CHAIN_CONFIGS[currentChainId];
+        if (!config) {
+            throw new Error(`Unsupported source chain: ${currentChainId}`);
+        }
+        return config;
+    }
+
     async payCrossChainPYUSD(
         amount: string,
-        sourceChainId: number,
         destChainId: number,
-        recipient: string
+        recipient: string,
+        sourceChainId: number // Add source chain parameter
     ): Promise<PaymentResult> {
+        console.log('🚀 Starting cross-chain payment...');
+        console.log('Amount:', amount, 'PYUSD');
+        console.log('Source Chain:', sourceChainId);
+        console.log('Destination Chain:', destChainId);
+        console.log('Recipient:', recipient);
+
         if (!this.signer) {
             throw new Error('Wallet not connected');
         }
 
         await this.ensureInitialized();
 
-        const srcConfig = CHAIN_CONFIGS[sourceChainId];
+        // Get configs based on actual chains
+        const srcConfig = this.getSourceChainConfig(sourceChainId);
         const destConfig = CHAIN_CONFIGS[destChainId];
 
-        console.log('🚀 Starting cross-chain payment...');
-        console.log('Amount:', amount, 'PYUSD');
-        console.log('Source Chain:', `${srcConfig.name} (${sourceChainId})`);
-        console.log('Destination Chain:', `${destConfig.name} (${destChainId})`);
-        console.log('Recipient:', recipient);
-
-        if (!srcConfig) {
-            throw new Error(`Unsupported source chain: ${sourceChainId}`);
-        }
         if (!destConfig) {
             throw new Error(`Unsupported destination chain: ${destChainId}`);
         }
@@ -450,22 +475,6 @@ export class RewardPaymentService {
 
         try {
             await this.refreshSigner();
-            
-            // Ensure we're on the source chain before checking approvals
-            const currentNetwork = await this.signer!.provider?.getNetwork();
-            console.log('🔍 Current network:', currentNetwork?.chainId);
-            console.log('🔍 Required source chain:', sourceChainId);
-            
-            if (currentNetwork?.chainId !== BigInt(sourceChainId)) {
-                const sourceChainHex = `0x${sourceChainId.toString(16)}`;
-                console.log(`🔄 Switching to source chain ${sourceChainId} (${sourceChainHex})...`);
-                await window.ethereum.request({
-                    method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: sourceChainHex }],
-                });
-                await this.refreshSigner();
-            }
-            
             const routerSrc = new ethers.Contract(srcConfig.routerAddress, ROUTER_ABI, this.signer);
 
             // Step 0: Ensure PYUSD approval on source chain
@@ -480,10 +489,10 @@ export class RewardPaymentService {
                 approvalTxHash = approvalHash;
             }
 
-            console.log(`💰 Step 1/4: Swapping PYUSD → USDC on ${srcConfig.name}...`);
+            console.log('💰 Step 1/4: Swapping PYUSD → USDC on source chain...');
             this.progressCallback?.({
                 step: 'swap',
-                message: `Swapping PYUSD to USDC on ${srcConfig.name}`
+                message: 'Swapping PYUSD to USDC on source chain'
             });
 
             const swapTx = await routerSrc.swapForBridge(amountWei);
@@ -500,40 +509,19 @@ export class RewardPaymentService {
             // Delay to let state settle
             await new Promise(resolve => setTimeout(resolve, 5000));
 
-            console.log(`🌉 Step 2/4: Bridging USDC from ${srcConfig.name} to ${destConfig.name} via Avail Nexus...`);
+            console.log('🌉 Step 2/4: Bridging USDC via Avail Nexus...');
             this.progressCallback?.({
                 step: 'bridge',
-                message: `Bridging USDC from ${srcConfig.name} to ${destConfig.name}`
+                message: 'Initiating bridge transaction...'
             });
 
-            // Log bridge configuration for debugging
-            console.log('� Bridge configuration:', {
-                token: 'USDC',
-                amount: amount,
-                amountWei: amountWei.toString(),
-                fromChain: sourceChainId,
-                toChain: destChainId,
-                executeContract: destConfig.routerAddress,
-                recipient: recipient
-            });
-
-            // Bridge with retry logic and EXPLICIT token approval handling
+            // Bridge with retry logic
             let bridgeResult;
             let retries = 0;
             const maxRetries = 5;
 
             while (retries < maxRetries) {
                 try {
-                    console.log('🔍 Bridge execution attempt:', {
-                        retryCount: retries,
-                        token: 'USDC',
-                        amount: amount,
-                        amountWei: amountWei.toString(),
-                        destChain: destChainId,
-                        destRouter: destConfig.routerAddress,
-                        recipient: recipient
-                    });
-
                     bridgeResult = await this.sdk.bridgeAndExecute({
                         token: 'USDC',
                         amount: amount,
@@ -542,21 +530,9 @@ export class RewardPaymentService {
                             contractAddress: destConfig.routerAddress,
                             contractAbi: ROUTER_ABI,
                             functionName: 'swapFromBridge',
-                            buildFunctionParams: () => {
-                                console.log('🔍 Building function params:', {
-                                    usdcAmount: amountWei.toString(),
-                                    recipient: recipient,
-                                    functionName: 'swapFromBridge'
-                                });
-                                return {
-                                    functionParams: [amountWei, recipient]
-                                };
-                            },
-                            // ✅ CRITICAL: Tell SDK to handle USDC approval on destination
-                            tokenApproval: {
-                                token: 'USDC',
-                                amount: ethers.formatUnits(amountWei, 6) // Use formatted string amount
-                            }
+                            buildFunctionParams: () => ({
+                                functionParams: [amountWei, recipient]
+                            }),
                         }
                     });
                     break;
@@ -568,16 +544,14 @@ export class RewardPaymentService {
                         error.message?.includes('too many requests');
 
                     const isApprovalError = error.message?.toLowerCase().includes('approval') ||
-                        error.message?.toLowerCase().includes('allowance') ||
-                        error.message?.toLowerCase().includes('0x75faf114');
+                        error.message?.toLowerCase().includes('allowance');
 
                     console.error(`Attempt ${retries}/${maxRetries} failed:`, error.message);
 
                     if (isRateLimited || isApprovalError) {
                         if (retries < maxRetries) {
-                            // Exponential backoff: 10s, 20s, 40s, 80s, 160s
                             const delay = 10000 * Math.pow(2, retries - 1);
-                            console.log(`Rate limited/approval issue, retrying in ${delay / 1000}s... (${retries}/${maxRetries})`);
+                            console.log(`${isApprovalError ? 'Handling approval' : 'Network congested'}, retrying in ${delay / 1000}s... (${retries}/${maxRetries})`);
 
                             this.progressCallback?.({
                                 step: 'bridge',
@@ -589,7 +563,6 @@ export class RewardPaymentService {
                             throw new Error('Network is heavily congested. Please try again in a few minutes.');
                         }
                     } else {
-                        // For other errors, fail immediately
                         throw error;
                     }
                 }
