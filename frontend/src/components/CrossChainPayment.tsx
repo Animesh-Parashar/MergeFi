@@ -46,7 +46,6 @@ export function CrossChainPayment({
     const [isPaymentInitiated, setIsPaymentInitiated] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
 
-    // Get wallet state from global store
     const { isConnected, chainId } = useWalletStore();
     const { switchChain, isPending: isSwitching } = useSwitchChain();
 
@@ -78,8 +77,8 @@ export function CrossChainPayment({
             console.log('Creating new payment service...');
             const service = new RewardPaymentService();
 
-            console.log('Initializing Nexus...');
-            await service.initNexus(window.ethereum);
+            console.log('Initializing Nexus (without connection prompt)...');
+            await service.initNexus(); // No provider parameter needed
 
             service.setProgressCallback(setCurrentProgress);
             setPaymentService(service);
@@ -101,16 +100,15 @@ export function CrossChainPayment({
         console.log('=== PAY BUTTON CLICKED ===');
         console.log('Amount:', amount);
         console.log('Connected:', isConnected);
-        console.log('Chain ID:', chainId);
+        console.log('Current Chain ID:', chainId);
         console.log('Destination Chain:', destChain);
-        console.log('Is Payment Initiated:', isPaymentInitiated);
 
         if (!amount || parseFloat(amount) <= 0) {
             console.error('Invalid amount');
             return;
         }
 
-        if (!isConnected) {
+        if (!isConnected || !chainId) {
             console.error('Wallet not connected');
             alert('Please connect your wallet first');
             return;
@@ -118,6 +116,18 @@ export function CrossChainPayment({
 
         if (isPaymentInitiated) {
             console.error('Payment already in progress');
+            return;
+        }
+
+        // Validate source chain
+        if (chainId !== 11155111 && chainId !== 421614) {
+            alert('Please switch to either Ethereum Sepolia or Arbitrum Sepolia');
+            return;
+        }
+
+        // Validate destination chain
+        if (chainId === destChain) {
+            alert('Source and destination chains cannot be the same');
             return;
         }
 
@@ -134,31 +144,18 @@ export function CrossChainPayment({
                 throw new Error('Failed to initialize payment service');
             }
 
-            console.log('Step 2: Checking chain...');
-            // Ensure we're on Sepolia
-            if (chainId !== 11155111) {
-                console.log('Switching to Sepolia...');
-                setCurrentProgress({
-                    step: 'approval',
-                    message: 'Please switch to Sepolia network...'
-                });
-
-                await switchChain({ chainId: 11155111 });
-
-                // Wait for chain switch
-                await new Promise(resolve => setTimeout(resolve, 3000));
-            }
-
-            console.log('Step 3: Initiating payment...');
+            console.log('Step 2: Initiating payment...');
             setCurrentProgress({
                 step: 'approval',
                 message: 'Starting cross-chain payment...'
             });
 
+            // Pass current chainId as source
             const result = await service.payCrossChainPYUSD(
                 amount,
                 destChain,
-                recipient
+                recipient,
+                chainId // Pass source chain ID
             );
 
             console.log('Payment completed:', result);
@@ -241,6 +238,7 @@ export function CrossChainPayment({
         return SUPPORTED_CHAINS.find(c => c.id === destChain);
     };
 
+    // Auto-switch destination when source changes
     useEffect(() => {
         if (chainId === destChain) {
             const otherChain = SUPPORTED_CHAINS.find(c => c.id !== chainId);
@@ -268,7 +266,7 @@ export function CrossChainPayment({
             <div className="space-y-6">
                 {!loading && !paymentResult ? (
                     <>
-                        {/* Important Notice */}
+                        {/* Important Notice - Updated */}
                         <Card className="bg-yellow-900/20 border-yellow-600">
                             <div className="flex items-start gap-3">
                                 <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -277,8 +275,8 @@ export function CrossChainPayment({
                                 <div>
                                     <div className="text-yellow-400 font-medium text-sm mb-1">Payment Process</div>
                                     <div className="text-yellow-200 text-xs">
-                                        Payments are processed from Sepolia → {destinationChain?.name}.
-                                        You'll be prompted to switch networks during the process.
+                                        Payments work in both directions: Sepolia ↔ Arbitrum Sepolia.
+                                        Make sure you're on the correct source network.
                                     </div>
                                 </div>
                             </div>
@@ -352,7 +350,7 @@ export function CrossChainPayment({
                                     className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded focus:border-gray-500 outline-none"
                                     disabled={loading}
                                 >
-                                    {SUPPORTED_CHAINS.map((chain) => (
+                                    {SUPPORTED_CHAINS.filter(c => c.id !== chainId).map((chain) => (
                                         <option key={chain.id} value={chain.id}>
                                             {chain.icon} {chain.name}
                                         </option>
@@ -360,14 +358,16 @@ export function CrossChainPayment({
                                 </select>
                             </div>
 
-                            {/* Cross-chain route indicator */}
+                            {/* Cross-chain route indicator - Updated */}
                             <Card className="bg-gray-900/50">
                                 <div className="flex items-center gap-3">
                                     <ArrowLeftRight className="w-5 h-5 text-blue-400" />
                                     <div className="text-sm text-gray-400">
-                                        <span className="text-blue-400">Ethereum Sepolia</span>
+                                        <span className={chainId === 11155111 ? "text-blue-400" : "text-orange-400"}>
+                                            {currentChain?.name || `Chain ${chainId}`}
+                                        </span>
                                         {' → '}
-                                        <span className="text-green-400">
+                                        <span className={destChain === 11155111 ? "text-blue-400" : "text-orange-400"}>
                                             {destinationChain?.name || `Chain ${destChain}`}
                                         </span>
                                     </div>
@@ -384,7 +384,7 @@ export function CrossChainPayment({
                             </Button>
                             <Button
                                 onClick={handlePay}
-                                disabled={!amount || parseFloat(amount) <= 0 || !isConnected || isPaymentInitiated || isSwitching || loading}
+                                disabled={!amount || parseFloat(amount) <= 0 || !isConnected || isPaymentInitiated || isSwitching || loading || chainId === destChain}
                                 className="flex-1"
                             >
                                 {isPaymentInitiated || loading ? 'Processing...' : `Pay ${amount} PYUSD`}
@@ -398,9 +398,11 @@ export function CrossChainPayment({
                             <h3 className="text-xl font-bold mb-2">Processing Payment</h3>
                             <p className="text-gray-400">Please wait while we process your cross-chain payment</p>
                             <div className="text-sm text-gray-500 mt-2">
-                                <span className="text-blue-400">Ethereum Sepolia</span>
+                                <span className={chainId === 11155111 ? "text-blue-400" : "text-orange-400"}>
+                                    {currentChain?.name || `Chain ${chainId}`}
+                                </span>
                                 {' → '}
-                                <span className="text-green-400">
+                                <span className={destChain === 11155111 ? "text-blue-400" : "text-orange-400"}>
                                     {destinationChain?.name || `Chain ${destChain}`}
                                 </span>
                             </div>
