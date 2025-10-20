@@ -18,6 +18,26 @@ const ROUTER_ABI = [
         ],
         "outputs": [{ "name": "pyusdAmt", "type": "uint256" }],
         "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "getBalances",
+        "inputs": [],
+        "outputs": [
+            { "name": "pyusdBalance", "type": "uint256" },
+            { "name": "usdcBalance", "type": "uint256" }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "addLiquidity",
+        "inputs": [
+            { "name": "pyusdAmount", "type": "uint256" },
+            { "name": "usdcAmount", "type": "uint256" }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
     }
 ] as const;
 
@@ -47,6 +67,7 @@ const ERC20_ABI = [
 
 interface ChainConfig {
     chainId: number;
+    name: string;
     rpcUrls: string[];
     routerAddress: string;
     pyusdAddress: string;
@@ -56,6 +77,7 @@ interface ChainConfig {
 const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     11155111: {
         chainId: 11155111,
+        name: 'Sepolia',
         rpcUrls: [
             'https://eth-sepolia.g.alchemy.com/v2/klloPedupe3EmhcjwvrMm',
         ],
@@ -65,6 +87,7 @@ const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     },
     421614: {
         chainId: 421614,
+        name: 'Arbitrum Sepolia',
         rpcUrls: [
             'https://sepolia-rollup.arbitrum.io/rpc', // Official public RPC
             'https://arbitrum-sepolia.blockpi.network/v1/rpc/public',
@@ -108,7 +131,7 @@ export class RewardPaymentService {
     private isInitialized: boolean = false;
 
     constructor() {
-        this.sdk = new NexusSDK({ network: 'testnet' });
+        this.sdk = new NexusSDK({ network: 'testnet'  });
     }
 
     async initNexus(provider: any) {
@@ -316,13 +339,55 @@ export class RewardPaymentService {
     ): Promise<string | null> {
         if (!this.signer) throw new Error('Signer not available');
 
-        const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.signer);
-        const userAddress = await this.signer.getAddress();
+        console.log(`🔍 Checking ${tokenSymbol} approval:`, {
+            tokenAddress,
+            spenderAddress,
+            amountWei: amountWei.toString(),
+            network: await this.signer.provider?.getNetwork()
+        });
 
-        // Check current allowance
-        const currentAllowance = await tokenContract.allowance(userAddress, spenderAddress);
+        try {
+            // First check if contract exists
+            const provider = this.signer.provider;
+            if (!provider) throw new Error('Provider not available');
+            
+            const code = await provider.getCode(tokenAddress);
+            if (code === '0x') {
+                throw new Error(`${tokenSymbol} contract does not exist at ${tokenAddress}`);
+            }
 
-        if (currentAllowance < amountWei) {
+            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.signer);
+            const userAddress = await this.signer.getAddress();
+
+            // Check current allowance with error handling
+            let currentAllowance: bigint;
+            try {
+                // For proxy contracts, sometimes we need to retry or use different approaches
+                console.log(`🔍 Calling allowance(${userAddress}, ${spenderAddress})`);
+                currentAllowance = await tokenContract.allowance(userAddress, spenderAddress);
+                console.log(`✅ Current ${tokenSymbol} allowance:`, currentAllowance.toString());
+            } catch (error: any) {
+                console.error(`❌ Failed to check ${tokenSymbol} allowance:`, error);
+                
+                // For proxy contracts, try calling with static call
+                try {
+                    console.log('🔄 Retrying with static call...');
+                    const data = tokenContract.interface.encodeFunctionData('allowance', [userAddress, spenderAddress]);
+                    const result = await provider.call({
+                        to: tokenAddress,
+                        data: data
+                    });
+                    currentAllowance = BigInt(result || '0');
+                    console.log(`✅ Allowance via static call:`, currentAllowance.toString());
+                } catch (staticError: any) {
+                    console.error(`❌ Static call also failed:`, staticError);
+                    // If all fails, assume zero allowance and try to approve
+                    currentAllowance = BigInt(0);
+                    console.log('⚠️ Assuming zero allowance, will attempt approval');
+                }
+            }
+
+            if (currentAllowance < amountWei) {
             console.log(`🔓 Approving ${tokenSymbol} spending...`);
             this.progressCallback?.({
                 step: 'approval',
@@ -343,29 +408,39 @@ export class RewardPaymentService {
             return approveTx.hash;
         }
 
-        console.log(`✅ ${tokenSymbol} already approved`);
-        return null; // No approval needed
+            console.log(`✅ ${tokenSymbol} already approved`);
+            return null; // No approval needed
+            
+        } catch (error: any) {
+            console.error(`❌ Token approval process failed for ${tokenSymbol}:`, error);
+            throw error;
+        }
     }
 
     async payCrossChainPYUSD(
         amount: string,
+        sourceChainId: number,
         destChainId: number,
         recipient: string
     ): Promise<PaymentResult> {
-        console.log('🚀 Starting cross-chain payment...');
-        console.log('Amount:', amount, 'PYUSD');
-        console.log('Destination Chain:', destChainId);
-        console.log('Recipient:', recipient);
-
         if (!this.signer) {
             throw new Error('Wallet not connected');
         }
 
         await this.ensureInitialized();
 
-        const srcConfig = CHAIN_CONFIGS[11155111];
+        const srcConfig = CHAIN_CONFIGS[sourceChainId];
         const destConfig = CHAIN_CONFIGS[destChainId];
 
+        console.log('🚀 Starting cross-chain payment...');
+        console.log('Amount:', amount, 'PYUSD');
+        console.log('Source Chain:', `${srcConfig.name} (${sourceChainId})`);
+        console.log('Destination Chain:', `${destConfig.name} (${destChainId})`);
+        console.log('Recipient:', recipient);
+
+        if (!srcConfig) {
+            throw new Error(`Unsupported source chain: ${sourceChainId}`);
+        }
         if (!destConfig) {
             throw new Error(`Unsupported destination chain: ${destChainId}`);
         }
@@ -375,6 +450,22 @@ export class RewardPaymentService {
 
         try {
             await this.refreshSigner();
+            
+            // Ensure we're on the source chain before checking approvals
+            const currentNetwork = await this.signer!.provider?.getNetwork();
+            console.log('🔍 Current network:', currentNetwork?.chainId);
+            console.log('🔍 Required source chain:', sourceChainId);
+            
+            if (currentNetwork?.chainId !== BigInt(sourceChainId)) {
+                const sourceChainHex = `0x${sourceChainId.toString(16)}`;
+                console.log(`🔄 Switching to source chain ${sourceChainId} (${sourceChainHex})...`);
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: sourceChainHex }],
+                });
+                await this.refreshSigner();
+            }
+            
             const routerSrc = new ethers.Contract(srcConfig.routerAddress, ROUTER_ABI, this.signer);
 
             // Step 0: Ensure PYUSD approval on source chain
@@ -389,10 +480,10 @@ export class RewardPaymentService {
                 approvalTxHash = approvalHash;
             }
 
-            console.log('💰 Step 1/4: Swapping PYUSD → USDC on source chain...');
+            console.log(`💰 Step 1/4: Swapping PYUSD → USDC on ${srcConfig.name}...`);
             this.progressCallback?.({
                 step: 'swap',
-                message: 'Swapping PYUSD to USDC on source chain'
+                message: `Swapping PYUSD to USDC on ${srcConfig.name}`
             });
 
             const swapTx = await routerSrc.swapForBridge(amountWei);
@@ -409,10 +500,21 @@ export class RewardPaymentService {
             // Delay to let state settle
             await new Promise(resolve => setTimeout(resolve, 5000));
 
-            console.log('🌉 Step 2/4: Bridging USDC via Avail Nexus...');
+            console.log(`🌉 Step 2/4: Bridging USDC from ${srcConfig.name} to ${destConfig.name} via Avail Nexus...`);
             this.progressCallback?.({
                 step: 'bridge',
-                message: 'Initiating bridge transaction...'
+                message: `Bridging USDC from ${srcConfig.name} to ${destConfig.name}`
+            });
+
+            // Log bridge configuration for debugging
+            console.log('� Bridge configuration:', {
+                token: 'USDC',
+                amount: amount,
+                amountWei: amountWei.toString(),
+                fromChain: sourceChainId,
+                toChain: destChainId,
+                executeContract: destConfig.routerAddress,
+                recipient: recipient
             });
 
             // Bridge with retry logic and EXPLICIT token approval handling
@@ -422,6 +524,16 @@ export class RewardPaymentService {
 
             while (retries < maxRetries) {
                 try {
+                    console.log('🔍 Bridge execution attempt:', {
+                        retryCount: retries,
+                        token: 'USDC',
+                        amount: amount,
+                        amountWei: amountWei.toString(),
+                        destChain: destChainId,
+                        destRouter: destConfig.routerAddress,
+                        recipient: recipient
+                    });
+
                     bridgeResult = await this.sdk.bridgeAndExecute({
                         token: 'USDC',
                         amount: amount,
@@ -430,15 +542,21 @@ export class RewardPaymentService {
                             contractAddress: destConfig.routerAddress,
                             contractAbi: ROUTER_ABI,
                             functionName: 'swapFromBridge',
-                            buildFunctionParams: () => ({
-                                functionParams: [amountWei, recipient]
-                            }),
-                            // ⚠️ CRITICAL: Tell SDK to handle USDC approval on destination
-                            // tokenApproval: {
-                            //     token: 'USDC',
-                            //     amount: amount,
-                            //    
-                            // }
+                            buildFunctionParams: () => {
+                                console.log('🔍 Building function params:', {
+                                    usdcAmount: amountWei.toString(),
+                                    recipient: recipient,
+                                    functionName: 'swapFromBridge'
+                                });
+                                return {
+                                    functionParams: [amountWei, recipient]
+                                };
+                            },
+                            // ✅ CRITICAL: Tell SDK to handle USDC approval on destination
+                            tokenApproval: {
+                                token: 'USDC',
+                                amount: ethers.formatUnits(amountWei, 6) // Use formatted string amount
+                            }
                         }
                     });
                     break;
@@ -527,6 +645,8 @@ export class RewardPaymentService {
             };
         }
     }
+
+
     /**
      * Clean up event listeners
      */

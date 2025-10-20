@@ -373,7 +373,7 @@ export function Home() {
             className="text-center mb-16"
           >
             <div className="mb-8">
-              <pre className="text-white text-sm lg:text-base font-bold leading-none inline-block">
+              <pre className="text-white text-sm lg:text-[20px] font-bold leading-none inline-block">
                 {`
  ███╗   ███╗███████╗██████╗  ██████╗ ███████╗███████╗██╗
  ████╗ ████║██╔════╝██╔══██╗██╔════╝ ██╔════╝██╔════╝██║
