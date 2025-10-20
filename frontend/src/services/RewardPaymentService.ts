@@ -272,36 +272,78 @@ export class RewardPaymentService {
     /**
      * Check and approve PYUSD spending if needed
      */
-    private async ensurePYUSDApproval(amountWei: bigint, routerAddress: string, pyusdAddress: string): Promise<string | null> {
+    // private async ensurePYUSDApproval(amountWei: bigint, routerAddress: string, pyusdAddress: string): Promise<string | null> {
+    //     if (!this.signer) throw new Error('Signer not available');
+
+    //     const pyusdContract = new ethers.Contract(pyusdAddress, ERC20_ABI, this.signer);
+    //     const userAddress = await this.signer.getAddress();
+
+    //     // Check current allowance
+    //     const currentAllowance = await pyusdContract.allowance(userAddress, routerAddress);
+
+    //     if (currentAllowance < amountWei) {
+    //         console.log('🔓 Approving PYUSD spending...');
+    //         this.progressCallback?.({
+    //             step: 'approval',
+    //             message: 'Approving PYUSD spending'
+    //         });
+
+    //         // Approve the router to spend PYUSD
+    //         const approveTx = await pyusdContract.approve(routerAddress, amountWei);
+    //         await approveTx.wait();
+
+    //         console.log('✅ PYUSD approval complete:', approveTx.hash);
+    //         this.progressCallback?.({
+    //             step: 'approval',
+    //             message: 'PYUSD approval completed',
+    //             txHash: approveTx.hash
+    //         });
+
+    //         return approveTx.hash;
+    //     }
+
+    //     return null; // No approval needed
+    // }
+
+    /**
+ * Check and approve token spending if needed (works for both PYUSD and USDC)
+ */
+    private async ensureTokenApproval(
+        tokenAddress: string,
+        spenderAddress: string,
+        amountWei: bigint,
+        tokenSymbol: string
+    ): Promise<string | null> {
         if (!this.signer) throw new Error('Signer not available');
 
-        const pyusdContract = new ethers.Contract(pyusdAddress, ERC20_ABI, this.signer);
+        const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.signer);
         const userAddress = await this.signer.getAddress();
 
         // Check current allowance
-        const currentAllowance = await pyusdContract.allowance(userAddress, routerAddress);
+        const currentAllowance = await tokenContract.allowance(userAddress, spenderAddress);
 
         if (currentAllowance < amountWei) {
-            console.log('🔓 Approving PYUSD spending...');
+            console.log(`🔓 Approving ${tokenSymbol} spending...`);
             this.progressCallback?.({
                 step: 'approval',
-                message: 'Approving PYUSD spending'
+                message: `Approving ${tokenSymbol} spending`
             });
 
-            // Approve the router to spend PYUSD
-            const approveTx = await pyusdContract.approve(routerAddress, amountWei);
+            // Approve spending
+            const approveTx = await tokenContract.approve(spenderAddress, amountWei);
             await approveTx.wait();
 
-            console.log('✅ PYUSD approval complete:', approveTx.hash);
+            console.log(`✅ ${tokenSymbol} approval complete:`, approveTx.hash);
             this.progressCallback?.({
                 step: 'approval',
-                message: 'PYUSD approval completed',
+                message: `${tokenSymbol} approval completed`,
                 txHash: approveTx.hash
             });
 
             return approveTx.hash;
         }
 
+        console.log(`✅ ${tokenSymbol} already approved`);
         return null; // No approval needed
     }
 
@@ -335,18 +377,19 @@ export class RewardPaymentService {
             await this.refreshSigner();
             const routerSrc = new ethers.Contract(srcConfig.routerAddress, ROUTER_ABI, this.signer);
 
-            // Step 0: Ensure PYUSD approval
-            const approvalHash = await this.ensurePYUSDApproval(
-                amountWei,
+            // Step 0: Ensure PYUSD approval on source chain
+            const approvalHash = await this.ensureTokenApproval(
+                srcConfig.pyusdAddress,
                 srcConfig.routerAddress,
-                srcConfig.pyusdAddress
+                amountWei,
+                'PYUSD'
             );
 
             if (approvalHash) {
                 approvalTxHash = approvalHash;
             }
 
-            console.log('💰 Step 1/3: Swapping PYUSD → USDC on source chain...');
+            console.log('💰 Step 1/4: Swapping PYUSD → USDC on source chain...');
             this.progressCallback?.({
                 step: 'swap',
                 message: 'Swapping PYUSD to USDC on source chain'
@@ -363,19 +406,19 @@ export class RewardPaymentService {
                 txHash: swapTx.hash
             });
 
-            console.log('🌉 Step 2/3: Bridging USDC via Avail Nexus...');
+            // Delay to let state settle
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            console.log('🌉 Step 2/4: Bridging USDC via Avail Nexus...');
             this.progressCallback?.({
                 step: 'bridge',
                 message: 'Initiating bridge transaction...'
             });
 
-            // Increased delay
-            await new Promise(resolve => setTimeout(resolve, 5000));
-
-            // Bridge with retry logic
+            // Bridge with retry logic and EXPLICIT token approval handling
             let bridgeResult;
             let retries = 0;
-            const maxRetries = 3;
+            const maxRetries = 5;
 
             while (retries < maxRetries) {
                 try {
@@ -390,28 +433,45 @@ export class RewardPaymentService {
                             buildFunctionParams: () => ({
                                 functionParams: [amountWei, recipient]
                             }),
+                            // ⚠️ CRITICAL: Tell SDK to handle USDC approval on destination
                             // tokenApproval: {
                             //     token: 'USDC',
-                            //     amount
+                            //     amount: amount,
+                            //    
                             // }
                         }
                     });
                     break;
                 } catch (error: any) {
                     retries++;
-                    if (error.message?.includes('rate limit') || error.message?.includes('429')) {
+
+                    const isRateLimited = error.message?.includes('rate limit') ||
+                        error.message?.includes('429') ||
+                        error.message?.includes('too many requests');
+
+                    const isApprovalError = error.message?.toLowerCase().includes('approval') ||
+                        error.message?.toLowerCase().includes('allowance') ||
+                        error.message?.toLowerCase().includes('0x75faf114');
+
+                    console.error(`Attempt ${retries}/${maxRetries} failed:`, error.message);
+
+                    if (isRateLimited || isApprovalError) {
                         if (retries < maxRetries) {
-                            const delay = 3000 * retries;
-                            console.log(`Rate limited, retrying in ${delay / 1000}s... (${retries}/${maxRetries})`);
+                            // Exponential backoff: 10s, 20s, 40s, 80s, 160s
+                            const delay = 10000 * Math.pow(2, retries - 1);
+                            console.log(`Rate limited/approval issue, retrying in ${delay / 1000}s... (${retries}/${maxRetries})`);
+
                             this.progressCallback?.({
                                 step: 'bridge',
-                                message: `Network congested, retrying in ${delay / 1000}s... (${retries}/${maxRetries})`
+                                message: `${isApprovalError ? 'Handling approval' : 'Network congested'}, waiting ${delay / 1000}s... (${retries}/${maxRetries})`
                             });
+
                             await new Promise(resolve => setTimeout(resolve, delay));
                         } else {
-                            throw new Error('Network is congested. Please try again in a few minutes.');
+                            throw new Error('Network is heavily congested. Please try again in a few minutes.');
                         }
                     } else {
+                        // For other errors, fail immediately
                         throw error;
                     }
                 }
@@ -447,6 +507,8 @@ export class RewardPaymentService {
                 errorMessage = 'Insufficient funds for transaction';
             } else if (error.message?.includes('rate limit') || error.message?.includes('429')) {
                 errorMessage = 'Network is congested. Please try again in a few minutes.';
+            } else if (error.message?.toLowerCase().includes('approval')) {
+                errorMessage = 'Token approval failed. Please try again.';
             } else if (error.message?.includes('network')) {
                 errorMessage = 'Network error occurred during transaction';
             }
@@ -465,7 +527,6 @@ export class RewardPaymentService {
             };
         }
     }
-
     /**
      * Clean up event listeners
      */
