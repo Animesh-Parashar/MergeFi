@@ -20,6 +20,7 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import ContributorsModal from '../components/ContributorsModal';
 import { CrossChainPayment } from '../components/CrossChainPayment';
+import { registerRepository, addFundsToRepo, isRepoRegistered } from '../utils/contracts';
 
 interface Repository {
   id: number;
@@ -88,6 +89,10 @@ export function Maintainer() {
   const [showCrossChainModal, setShowCrossChainModal] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [selectedNetwork, setSelectedNetwork] = useState<'sepolia' | 'arbitrumSepolia'>('sepolia');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [isAddingFunds, setIsAddingFunds] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState<{ [key: number]: boolean }>({});
   const reposPerPage = 3;
 
   useEffect(() => {
@@ -203,29 +208,91 @@ export function Maintainer() {
     setShowRewardModal(true);
   };
 
+  useEffect(() => {
+    checkRepositoriesRegistration();
+  }, [repositories]);
+
+  const checkRepositoriesRegistration = async () => {
+    const statuses: { [key: number]: boolean } = {};
+
+    for (const repo of repositories) {
+      const registered = await isRepoRegistered(repo.full_name, selectedNetwork);
+      statuses[repo.id] = registered;
+    }
+
+    setRegistrationStatus(statuses);
+  };
+
+  const handleOpenToContributions = async (repo: Repository) => {
+    if (registrationStatus[repo.id]) {
+      // Already registered, just toggle status
+      toggleContributionStatus(repo.id);
+      return;
+    }
+
+    // Register the repository on-chain
+    setIsRegistering(true);
+    try {
+      const result = await registerRepository(
+        repo.full_name,
+        repo.html_url,
+        selectedNetwork
+      );
+
+      if (result.success) {
+        // Update registration status
+        setRegistrationStatus(prev => ({ ...prev, [repo.id]: true }));
+
+        // Toggle contribution status
+        toggleContributionStatus(repo.id);
+
+        // Show success message
+        alert(`Repository ${repo.name} successfully registered on-chain!`);
+      } else {
+        alert(`Failed to register repository: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error registering repository:', error);
+      alert('Failed to register repository. Please try again.');
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
   const submitFunds = async () => {
     if (!selectedRepo || !fundAmount || parseFloat(fundAmount) <= 0) return;
 
+    setIsAddingFunds(true);
     try {
-      // TODO: Make API call to add funds to repository pool
-      // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/add-funds`, {
-      //   amount: parseFloat(fundAmount)
-      // }, { withCredentials: true });
-
-      // Update local state
-      setRepositories(prev =>
-        prev.map(repo =>
-          repo.id === selectedRepo.id
-            ? { ...repo, poolAmount: (repo.poolAmount || 0) + parseFloat(fundAmount) }
-            : repo
-        )
+      const result = await addFundsToRepo(
+        selectedRepo.full_name,
+        fundAmount,
+        selectedNetwork
       );
 
-      setShowRewardModal(false);
-      setFundAmount('');
-      setSelectedRepo(null);
+      if (result.success) {
+        // Update local state
+        setRepositories(prev =>
+          prev.map(repo =>
+            repo.id === selectedRepo.id
+              ? { ...repo, poolAmount: (repo.poolAmount || 0) + parseFloat(fundAmount) }
+              : repo
+          )
+        );
+
+        setShowRewardModal(false);
+        setFundAmount('');
+        setSelectedRepo(null);
+
+        alert(`Successfully added ${fundAmount} PyUSD to ${selectedRepo.name}!`);
+      } else {
+        alert(`Failed to add funds: ${result.error}`);
+      }
     } catch (error) {
       console.error('Error adding funds:', error);
+      alert('Failed to add funds. Please try again.');
+    } finally {
+      setIsAddingFunds(false);
     }
   };
 
@@ -306,24 +373,39 @@ export function Maintainer() {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-7xl mx-auto"
       >
-        {/* Header with user info */}
+        {/* Header with network selector */}
         <div className="mb-12">
-          <div className="flex items-center gap-4 mb-4">
-            {user?.avatar_url && (
-              <img
-                src={user.avatar_url}
-                alt={user.name || user.login}
-                className="w-16 h-16 rounded-full"
-              />
-            )}
-            <div>
-              <h1 className="text-4xl lg:text-5xl font-bold">
-                {user?.name || 'Maintainer'} Dashboard
-              </h1>
-              <p className="text-gray-400 text-lg">
-                @{user?.login} • {user?.company && `${user.company} • `}
-                Manage repositories, reward pools, and approve transactions
-              </p>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              {user?.avatar_url && (
+                <img
+                  src={user.avatar_url}
+                  alt={user.name || user.login}
+                  className="w-16 h-16 rounded-full"
+                />
+              )}
+              <div>
+                <h1 className="text-4xl lg:text-5xl font-bold">
+                  {user?.name || 'Maintainer'} Dashboard
+                </h1>
+                <p className="text-gray-400 text-lg">
+                  @{user?.login} • {user?.company && `${user.company} • `}
+                  Manage repositories, reward pools, and approve transactions
+                </p>
+              </div>
+            </div>
+
+            {/* Network Selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Network:</span>
+              <select
+                value={selectedNetwork}
+                onChange={(e) => setSelectedNetwork(e.target.value as 'sepolia' | 'arbitrumSepolia')}
+                className="bg-gray-900 border border-gray-700 rounded px-4 py-2 text-white"
+              >
+                <option value="sepolia">Ethereum Sepolia</option>
+                <option value="arbitrumSepolia">Arbitrum Sepolia</option>
+              </select>
             </div>
           </div>
 
@@ -396,17 +478,8 @@ export function Maintainer() {
             </div>
 
             {loading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <Card key={i}>
-                    <div className="animate-pulse">
-                      <div className="h-4 bg-gray-700 rounded mb-4"></div>
-                      <div className="h-3 bg-gray-800 rounded mb-2"></div>
-                      <div className="h-3 bg-gray-800 rounded w-2/3"></div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+              // ...existing loading state...
+              <div>Loading...</div>
             ) : (
               <>
                 <div className="space-y-4 mb-6">
@@ -486,6 +559,9 @@ export function Maintainer() {
                               </div>
                               <div className="text-xs text-gray-500">
                                 {repo.stats.open_issues_count} open issues
+                                {registrationStatus[repo.id] && (
+                                  <span className="ml-2 text-green-400">• Registered On-Chain</span>
+                                )}
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -503,11 +579,13 @@ export function Maintainer() {
                               <Button
                                 size="sm"
                                 variant={repo.isOpenToContributions ? "secondary" : "outline"}
-                                onClick={() => toggleContributionStatus(repo.id)}
+                                onClick={() => handleOpenToContributions(repo)}
+                                disabled={isRegistering}
                               >
-                                {repo.isOpenToContributions ? 'Close' : 'Open to Contributions'}
+                                {isRegistering ? 'Registering...' :
+                                  repo.isOpenToContributions ? 'Close' : 'Open to Contributions'}
                               </Button>
-                              {repo.isOpenToContributions && (
+                              {repo.isOpenToContributions && registrationStatus[repo.id] && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -665,7 +743,7 @@ export function Maintainer() {
         </div>
       </motion.div>
 
-      {/* Add Funds Modal */}
+      {/* Add Funds Modal - Updated */}
       <Modal
         isOpen={showRewardModal}
         onClose={() => setShowRewardModal(false)}
@@ -676,6 +754,12 @@ export function Maintainer() {
             <label className="block text-sm text-gray-400 mb-2">Repository</label>
             <div className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded">
               {selectedRepo?.name || 'Select Repository'}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Network</label>
+            <div className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded">
+              {selectedNetwork === 'sepolia' ? 'Ethereum Sepolia' : 'Arbitrum Sepolia'}
             </div>
           </div>
           <div>
@@ -694,9 +778,9 @@ export function Maintainer() {
           <Button
             className="w-full"
             onClick={submitFunds}
-            disabled={!fundAmount || parseFloat(fundAmount) <= 0}
+            disabled={!fundAmount || parseFloat(fundAmount) <= 0 || isAddingFunds}
           >
-            Add ${fundAmount || '0'} to Pool
+            {isAddingFunds ? 'Adding Funds...' : `Add $${fundAmount || '0'} to Pool`}
           </Button>
         </div>
       </Modal>

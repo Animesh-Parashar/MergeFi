@@ -308,4 +308,57 @@ contract MergeFiRegistry is Ownable {
         RewardPool pool = RewardPool(repos[repoName].pool);
         return pool.getAllContributors();
     }
+
+    // Add this new function to get paginated repos with full details
+    function getReposWithDetails(
+        uint256 offset,
+        uint256 limit
+    )
+        external
+        view
+        returns (
+            string[] memory names,
+            string[] memory githubUrls,
+            address[] memory maintainers,
+            address[] memory pools,
+            bool[] memory verifiedStatus,
+            uint256[] memory totalFundings,
+            uint256[] memory contributorCounts,
+            uint256[] memory createdAts
+        )
+    {
+        uint256 totalRepos = allRepos.length;
+        uint256 end = offset + limit > totalRepos ? totalRepos : offset + limit;
+        uint256 size = end > offset ? end - offset : 0;
+
+        names = new string[](size);
+        githubUrls = new string[](size);
+        maintainers = new address[](size);
+        pools = new address[](size);
+        verifiedStatus = new bool[](size);
+        totalFundings = new uint256[](size);
+        contributorCounts = new uint256[](size);
+        createdAts = new uint256[](size);
+
+        for (uint256 i = 0; i < size; i++) {
+            string memory repoName = allRepos[offset + i];
+            Repo memory repo = repos[repoName];
+
+            names[i] = repo.name;
+            githubUrls[i] = repo.githubUrl;
+            maintainers[i] = repo.maintainer;
+            pools[i] = repo.pool;
+            verifiedStatus[i] = repo.verified;
+            totalFundings[i] = repo.totalFunding;
+            contributorCounts[i] = repo.contributorCount;
+            createdAts[i] = repo.createdAt;
+        }
+    }
+
+    // Add function to check if repo is registered
+    function isRepoRegistered(
+        string memory repoName
+    ) external view returns (bool) {
+        return repos[repoName].maintainer != address(0);
+    }
 }
