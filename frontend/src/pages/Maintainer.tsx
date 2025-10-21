@@ -19,7 +19,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import ContributorsModal from '../components/ContributorsModal';
-import { CrossChainPayment } from '../components/CrossChainPayment';
+
 
 interface Repository {
   id: number;
@@ -40,6 +40,15 @@ interface Repository {
   };
   isOpenToContributions?: boolean;
   poolAmount?: number;
+}
+
+interface Contributor {
+  id: number;
+  login: string;
+  name: string;
+  avatar_url: string;
+  contributions: number;
+  weight?: number;
 }
 
 interface User {
@@ -72,6 +81,7 @@ interface MaintainerData {
 export function Maintainer() {
   const [showRewardModal, setShowRewardModal] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [backendStats, setBackendStats] = useState<MaintainerStats | null>(null);
@@ -85,6 +95,9 @@ export function Maintainer() {
     owner: '',
     repo: ''
   });
+  const [payoutContributors, setPayoutContributors] = useState<Contributor[]>([]);
+  const [payoutFundAmount, setPayoutFundAmount] = useState('');
+  const [loadingRepoId, setLoadingRepoId] = useState<number | null>(null);
   const [showCrossChainModal, setShowCrossChainModal] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -169,7 +182,7 @@ export function Maintainer() {
           updated_at: '2024-03-01T00:00:00Z',
           stats: { contributors_count: 5, open_issues_count: 4, open_prs_count: 2 },
           isOpenToContributions: false,
-          poolAmount: 0,
+          poolAmount: 1500,
         },
       ]);
     } finally {
@@ -177,24 +190,128 @@ export function Maintainer() {
     }
   };
 
-  const toggleContributionStatus = async (repoId: number) => {
-    // In a real app, this would make an API call to update the database
+  const handleListRepo = async (repo: Repository) => {
+    // This function will list the repository for contributions
+    console.log('Listing repository:', repo.name);
+    // TODO: Make API call to list repository
+    
+    // Update local state to mark as listed
     setRepositories(prev =>
-      prev.map(repo =>
-        repo.id === repoId
-          ? { ...repo, isOpenToContributions: !repo.isOpenToContributions }
-          : repo
+      prev.map(r =>
+        r.id === repo.id
+          ? { ...r, isOpenToContributions: true }
+          : r
       )
     );
+  };
 
-    // TODO: Make API call to update repository status
-    // try {
-    //   await axios.patch(`http://localhost:5000/api/repository/${repoId}/contribution-status`, {
-    //     isOpenToContributions: !repositories.find(r => r.id === repoId)?.isOpenToContributions
-    //   }, { withCredentials: true });
-    // } catch (error) {
-    //   console.error('Error updating contribution status:', error);
-    // }
+  const handlePayout = async (repo: Repository) => {
+    // Fetch contributors for this repository from the API
+    try {
+      setError(null);
+      setLoadingRepoId(repo.id);
+      const [owner, repoName] = repo.full_name.split('/');
+      
+      const response = await axios.get(
+        `http://localhost:5000/api/repos/${owner}/${repoName}/contributors`,
+        { withCredentials: true }
+      );
+
+      // Map API response to our Contributor interface
+      const contributors: Contributor[] = response.data.contributors.map((contributor: any) => ({
+        id: contributor.id,
+        login: contributor.login,
+        name: contributor.name || contributor.login,
+        avatar_url: contributor.avatar_url,
+        contributions: contributor.contributions,
+        weight: 5 // Default weight of 5 (middle value between 1-10)
+      }));
+
+      if (contributors.length === 0) {
+        setError('No contributors found for this repository');
+        return;
+      }
+
+      setPayoutContributors(contributors);
+      setSelectedRepo(repo);
+      setPayoutFundAmount('');
+      setShowPayoutModal(true);
+    } catch (error: any) {
+      console.error('Error fetching contributors:', error);
+      if (error.response?.status === 401) {
+        setError('Authentication required. Please log in again.');
+      } else if (error.response?.status === 404) {
+        setError('Repository not found or you don\'t have access to it.');
+      } else {
+        setError('Failed to fetch contributors. Please try again.');
+      }
+    } finally {
+      setLoadingRepoId(null);
+    }
+  };
+
+  const handleWeightChange = (contributorId: number, weight: number) => {
+    setPayoutContributors(prev =>
+      prev.map(contributor =>
+        contributor.id === contributorId
+          ? { ...contributor, weight }
+          : contributor
+      )
+    );
+  };
+
+  const handleConfirmPayout = async () => {
+    if (!selectedRepo || !payoutFundAmount || parseFloat(payoutFundAmount) <= 0) {
+      setError('Please enter a valid fund amount');
+      return;
+    }
+
+    if (payoutContributors.some(c => !c.weight || c.weight < 1 || c.weight > 10)) {
+      setError('Please set weights between 1-10 for all contributors');
+      return;
+    }
+
+    try {
+      // Calculate total weight
+      const totalWeight = payoutContributors.reduce((sum, c) => sum + (c.weight || 0), 0);
+      const fundAmountNum = parseFloat(payoutFundAmount);
+
+      // Calculate individual payouts
+      const payouts = payoutContributors.map(contributor => ({
+        ...contributor,
+        payout: (fundAmountNum * (contributor.weight || 0)) / totalWeight
+      }));
+
+      console.log('Processing payout:', {
+        repo: selectedRepo.name,
+        totalAmount: fundAmountNum,
+        payouts
+      });
+
+      // TODO: Make API call to process payout
+      // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/payout`, {
+      //   contributors: payouts,
+      //   totalAmount: fundAmountNum
+      // }, { withCredentials: true });
+
+      // Update repository pool amount
+      setRepositories(prev =>
+        prev.map(repo =>
+          repo.id === selectedRepo.id
+            ? { ...repo, poolAmount: Math.max(0, (repo.poolAmount || 0) - fundAmountNum) }
+            : repo
+        )
+      );
+
+      setShowPayoutModal(false);
+      setPayoutContributors([]);
+      setPayoutFundAmount('');
+      setSelectedRepo(null);
+      setError(null);
+    } catch (error) {
+      console.error('Error processing payout:', error);
+      setError('Failed to process payout');
+    }
   };
 
   const handleAddFunds = (repo: Repository) => {
@@ -341,7 +458,7 @@ export function Maintainer() {
               <div>
                 <div className="text-gray-400 text-sm mb-2">Total Pool Value</div>
                 <div className="text-3xl font-bold">${totalPoolValue.toLocaleString()}</div>
-                <div className="text-green-400 text-sm mt-1">PyUSD</div>
+                <div className="text-green-400 text-sm mt-1">USDC</div>
               </div>
               <DollarSign className="w-12 h-12 text-gray-700" />
             </div>
@@ -482,7 +599,7 @@ export function Maintainer() {
                           <div className="flex items-center justify-between pt-3 border-t border-gray-800">
                             <div>
                               <div className="text-sm text-gray-400">
-                                Pool: ${repo.poolAmount?.toLocaleString() || 0} PyUSD
+                                Pool: ${repo.poolAmount?.toLocaleString() || 0} USDC
                               </div>
                               <div className="text-xs text-gray-500">
                                 {repo.stats.open_issues_count} open issues
@@ -502,20 +619,19 @@ export function Maintainer() {
                               </Button>
                               <Button
                                 size="sm"
-                                variant={repo.isOpenToContributions ? "secondary" : "outline"}
-                                onClick={() => toggleContributionStatus(repo.id)}
+                                variant="outline"
+                                onClick={() => handleListRepo(repo)}
                               >
-                                {repo.isOpenToContributions ? 'Close' : 'Open to Contributions'}
+                                List Repo
                               </Button>
-                              {repo.isOpenToContributions && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleAddFunds(repo)}
-                                >
-                                  Add Funds
-                                </Button>
-                              )}
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handlePayout(repo)}
+                                disabled={loadingRepoId === repo.id}
+                              >
+                                {loadingRepoId === repo.id ? 'Loading...' : 'Payout'}
+                              </Button>
                             </div>
                           </div>
                         </div>
@@ -569,7 +685,7 @@ export function Maintainer() {
                     <div className="text-sm text-gray-400 space-y-2">
                       <p>• PR #234: High complexity, suggests +$25 from base amount</p>
                       <p>• PR #156: Critical bug fix, suggests +$30 for impact</p>
-                      <p>• Average reward: $235 PyUSD per merged PR</p>
+                      <p>• Average reward: $235 USDC per merged PR</p>
                     </div>
                   </div>
                 </div>
@@ -630,7 +746,7 @@ export function Maintainer() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-400">Amount</div>
-                      <div className="font-bold">${tx.amount} PyUSD</div>
+                      <div className="font-bold">${tx.amount} USDC</div>
                       {tx.aiSuggestion !== tx.amount && (
                         <div className="text-xs text-yellow-400">
                           AI suggests: ${tx.aiSuggestion}
@@ -679,7 +795,7 @@ export function Maintainer() {
             </div>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-2">Amount (PyUSD)</label>
+            <label className="block text-sm text-gray-400 mb-2">Amount (USDC)</label>
             <input
               type="number"
               placeholder="1000"
@@ -689,7 +805,7 @@ export function Maintainer() {
             />
           </div>
           <div className="text-sm text-gray-400">
-            Current pool: ${selectedRepo?.poolAmount?.toLocaleString() || 0} PyUSD
+            Current pool: ${selectedRepo?.poolAmount?.toLocaleString() || 0} USDC
           </div>
           <Button
             className="w-full"
@@ -719,11 +835,11 @@ export function Maintainer() {
             </div>
             <div className="flex justify-between py-2 border-b border-gray-800">
               <span className="text-gray-400">Amount</span>
-              <span className="font-bold">$250 PyUSD</span>
+              <span className="font-bold">$250 USDC</span>
             </div>
             <div className="flex justify-between py-2">
               <span className="text-gray-400">AI Suggestion</span>
-              <span className="font-bold text-yellow-400">$275 PyUSD</span>
+              <span className="font-bold text-yellow-400">$275 USDC</span>
             </div>
           </div>
           <div className="flex gap-4">
@@ -745,14 +861,103 @@ export function Maintainer() {
         repo={contributorsModal.repo}
       />
 
-      {/* Cross-Chain Payment Modal - Updated */}
-      <CrossChainPayment
-        isOpen={showCrossChainModal}
-        onClose={handleCrossChainModalClose}
-        recipient={selectedTransaction?.contributor || ''}
-        suggestedAmount={selectedTransaction?.amount || 0}
-        onPaymentComplete={handlePaymentComplete}
-      />
+      {/* Payout Modal */}
+      <Modal
+        isOpen={showPayoutModal}
+        onClose={() => setShowPayoutModal(false)}
+        title={`Payout Contributors - ${selectedRepo?.name}`}
+      >
+        <div className="space-y-6">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded">
+              {error}
+            </div>
+          )}
+          
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-4">Contributors</h3>
+            <div className="space-y-3">
+              {payoutContributors.length > 0 ? (
+                payoutContributors.map((contributor) => (
+                  <div key={contributor.id} className="bg-gray-800 p-4 rounded border border-gray-700">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={contributor.avatar_url}
+                          alt={contributor.name}
+                          className="w-8 h-8 rounded-full"
+                        />
+                        <div>
+                          <div className="text-white font-medium">{contributor.name}</div>
+                          <div className="text-gray-400 text-sm">@{contributor.login}</div>
+                          <div className="text-gray-500 text-xs">{contributor.contributions} contributions</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-gray-400 text-sm">Weight:</label>
+                        <select
+                          value={contributor.weight || 5}
+                          onChange={(e) => handleWeightChange(contributor.id, parseInt(e.target.value))}
+                          className="bg-gray-900 border border-gray-600 text-white px-2 py-1 rounded text-sm w-16"
+                        >
+                          {[...Array(10)].map((_, i) => (
+                            <option key={i + 1} value={i + 1}>
+                              {i + 1}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-400 text-center py-4">
+                  No contributors found for this repository.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Total Fund Amount (USDC)</label>
+            <input
+              type="number"
+              placeholder="1000"
+              value={payoutFundAmount}
+              onChange={(e) => setPayoutFundAmount(e.target.value)}
+              className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded focus:border-gray-500 outline-none"
+            />
+            {selectedRepo?.poolAmount !== undefined && selectedRepo.poolAmount > 0 && (
+              <div className="text-sm text-gray-400 mt-1">
+                Available in pool: ${selectedRepo.poolAmount.toLocaleString()} USDC
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-4">
+            <Button
+              className="flex-1"
+              onClick={handleConfirmPayout}
+              disabled={!payoutFundAmount || parseFloat(payoutFundAmount) <= 0}
+            >
+              Confirm Payout
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setShowPayoutModal(false);
+                setError(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      
+     
     </div>
   );
 }

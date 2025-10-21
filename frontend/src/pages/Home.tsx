@@ -392,7 +392,7 @@ export function Home() {
             </h1>
 
             <p className="text-lg text-gray-400 leading-relaxed max-w-3xl mx-auto mb-12">
-              Earn PyUSD for your contributions. Verified, transparent, and on-chain.
+              Earn USDC for your contributions. Verified, transparent, and on-chain.
               <br />
               MergeFi bridges the gap between open source work and fair compensation.
             </p>
@@ -439,10 +439,10 @@ export function Home() {
               <div className="space-y-2 text-sm">
                 <div className="text-gray-400">$ mergefi status --active</div>
                 <div className="text-white">✓ Platform Status: Online</div>
-                <div className="text-white">✓ Payment Network: PyUSD</div>
+                <div className="text-white">✓ Payment Network: USDC</div>
                 <div className="text-white">✓ Verified Repos: 247</div>
                 <div className="text-white">✓ Total Contributors: 1,829</div>
-                <div className="text-green-400">✓ Total Rewards Distributed: $54,290 PyUSD</div>
+                <div className="text-green-400">✓ Total Rewards Distributed: $54,290 USDC</div>
               </div>
             </Card>
           </motion.div>
@@ -601,7 +601,7 @@ export function Home() {
               {
                 step: '01',
                 title: 'Maintainer Creates Pool',
-                description: 'Repository owners set up reward pools with PyUSD',
+                description: 'Repository owners set up reward pools with USDC',
                 icon: Coins,
               },
               {
@@ -619,7 +619,7 @@ export function Home() {
               {
                 step: '04',
                 title: 'Earn & Badge',
-                description: 'Get paid in PyUSD and earn NFT badges',
+                description: 'Get paid in USDC and earn NFT badges',
                 icon: Award,
               },
             ].map((item, index) => (
@@ -672,7 +672,7 @@ export function Home() {
               {
                 title: 'Decentralized Payments',
                 description:
-                  'All transactions processed on-chain with PyUSD for transparency and security',
+                  'All transactions processed on-chain with USDC for transparency and security',
               },
               {
                 title: 'NFT Achievement Badges',
@@ -724,7 +724,7 @@ export function Home() {
               Built on cutting-edge blockchain technology
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center opacity-60">
-              {['PyUSD', 'Avail', 'Blockscout', 'Ethereum'].map((tech) => (
+              {['USDC', 'Avail', 'Blockscout', 'Ethereum'].map((tech) => (
                 <div key={tech} className="text-xl font-bold text-gray-500">
                   {tech}
                 </div>

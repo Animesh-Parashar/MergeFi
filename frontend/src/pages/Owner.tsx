@@ -91,7 +91,7 @@ export function Owner() {
               <div>
                 <div className="text-gray-400 text-sm mb-2">Total Payouts</div>
                 <div className="text-2xl font-bold">$54,290</div>
-                <div className="text-green-400 text-sm mt-1">PyUSD</div>
+                <div className="text-green-400 text-sm mt-1">USDC</div>
               </div>
               <Activity className="w-10 h-10 text-gray-700" />
             </div>
@@ -286,7 +286,7 @@ export function Owner() {
                     <div className="flex justify-between text-gray-400">
                       <span>Pool Size</span>
                       <span className="text-green-400">
-                        ${repo.poolSize} PyUSD
+                        ${repo.poolSize} USDC
                       </span>
                     </div>
                   </div>
