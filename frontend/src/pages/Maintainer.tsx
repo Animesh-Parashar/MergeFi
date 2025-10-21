@@ -334,7 +334,7 @@ export function Maintainer() {
   const pendingTransactions = [
     {
       id: 1,
-      contributor: '0x484826732d75d6A8018bFAD3468Bd84f64614268',
+      contributor: '0xF41E4fB4e7F1F6E484033c878f078A2DF57dB854',
       pr: '#234',
       repo: repositories[0]?.name || 'awesome-blockchain',
       amount: 250,
