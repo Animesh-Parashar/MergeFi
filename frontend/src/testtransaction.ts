@@ -11,8 +11,8 @@ export const CHAINS = {
  */
 export async function testCrossChainPayment(
     amount: string = '0.0001', // Back to original amount
-    sourceChain: number = CHAINS.SEPOLIA, // Switch back to working direction
-    destChain: number = CHAINS.ARBITRUM_SEPOLIA,
+    sourceChain: number = CHAINS.ARBITRUM_SEPOLIA,
+    destChain: number = CHAINS.SEPOLIA,
     recipient: string = '0xF41E4fB4e7F1F6E484033c878f078A2DF57dB854'
 ) {
     const paymentService = new RewardPaymentService();
