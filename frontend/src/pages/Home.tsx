@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GitBranch, Coins, Shield, Award, X } from 'lucide-react';
+import { GitBranch, Coins, Shield, Award, X, CheckCircle } from 'lucide-react';
 import { Card } from '../components/Card';
+import { Button } from '../components/Button';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { getAllRegisteredRepos } from '../utils/contracts';
 
 export function Home() {
   const [showTerminal, setShowTerminal] = useState(false);
@@ -16,6 +18,9 @@ export function Home() {
   const [showCursor, setShowCursor] = useState(true);
   const [githubUser, setGithubUser] = useState<any>(null);
   const [authProcessed, setAuthProcessed] = useState(false); // Add this new state
+  const [registeredRepos, setRegisteredRepos] = useState<any[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState(true);
+  const [selectedNetwork, setSelectedNetwork] = useState<'sepolia' | 'arbitrumSepolia'>('sepolia');
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -56,6 +61,10 @@ export function Home() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
+  useEffect(() => {
+    fetchRegisteredRepos();
+  }, [selectedNetwork]);
+
   const checkAuthStatus = async () => {
     try {
       const response = await axios.get('http://localhost:5000/api/auth/status', {
@@ -86,6 +95,15 @@ export function Home() {
       // User not authenticated, which is fine
       console.log('User not authenticated');
     }
+  };
+
+  const fetchRegisteredRepos = async () => {
+    setLoadingRepos(true);
+    const result = await getAllRegisteredRepos(selectedNetwork);
+    if (result.success) {
+      setRegisteredRepos(result.repos);
+    }
+    setLoadingRepos(false);
   };
 
   const handleGitHubConnect = () => {
@@ -645,6 +663,114 @@ export function Home() {
               </motion.div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Registered Repositories Section - Add after "How It Works" section */}
+      <section className="px-6 py-20 lg:px-12 border-t border-gray-900">
+        <div className="max-w-7xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl lg:text-5xl font-bold mb-6">Open for Contributions</h2>
+            <p className="text-xl text-gray-400 mb-8">
+              Verified repositories accepting contributions with reward pools
+            </p>
+
+            {/* Network Selector */}
+            <div className="flex items-center justify-center gap-2 mb-8">
+              <span className="text-sm text-gray-400">Network:</span>
+              <select
+                value={selectedNetwork}
+                onChange={(e) => setSelectedNetwork(e.target.value as 'sepolia' | 'arbitrumSepolia')}
+                className="bg-gray-900 border border-gray-700 rounded px-4 py-2 text-white"
+              >
+                <option value="sepolia">Ethereum Sepolia</option>
+                <option value="arbitrumSepolia">Arbitrum Sepolia</option>
+              </select>
+            </div>
+          </motion.div>
+
+          {loadingRepos ? (
+            <div className="text-center text-gray-400">
+              <div className="animate-pulse">Loading repositories...</div>
+            </div>
+          ) : registeredRepos.length === 0 ? (
+            <div className="text-center text-gray-400">
+              <p>No repositories registered yet on {selectedNetwork === 'sepolia' ? 'Ethereum Sepolia' : 'Arbitrum Sepolia'}</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {registeredRepos.map((repo, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Card hover className="h-full">
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <GitBranch className="w-5 h-5 text-gray-400" />
+                            <span className="font-bold">{repo.name}</span>
+                            {repo.verified && (
+                              <CheckCircle className="w-4 h-4 text-green-400" />
+                            )}
+                          </div>
+                          <a
+                            href={repo.githubUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-400 hover:text-blue-300 break-all"
+                          >
+                            {repo.githubUrl}
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Reward Pool:</span>
+                          <span className="font-bold text-green-400">
+                            ${parseFloat(repo.totalFunding).toLocaleString()} PyUSD
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Contributors:</span>
+                          <span>{repo.contributorCount}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Maintainer:</span>
+                          <span className="font-mono text-xs">
+                            {repo.maintainer.slice(0, 6)}...{repo.maintainer.slice(-4)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-gray-800">
+                        <a
+                          href={repo.githubUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button className="w-full" variant="outline">
+                            <GitBranch className="w-4 h-4 mr-2" />
+                            Start Contributing
+                          </Button>
+                        </a>
+                      </div>
+                    </div>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
