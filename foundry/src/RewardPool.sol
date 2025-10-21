@@ -8,8 +8,7 @@ contract RewardPool {
 
     struct Contributor {
         address wallet;
-        string githubUsername;
-        uint256 aiScore; // AI model score (0-10000)
+        string githubUsername; 
         uint256 contributionCount; // Number of contributions
         bool isActive;
     }

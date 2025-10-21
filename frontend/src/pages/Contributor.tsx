@@ -105,7 +105,7 @@ export function Contributor() {
               <div>
                 <div className="text-gray-400 text-sm mb-2">Total Earnings</div>
                 <div className="text-3xl font-bold">$1,540</div>
-                <div className="text-green-400 text-sm mt-1">PyUSD</div>
+                <div className="text-green-400 text-sm mt-1">USDC</div>
               </div>
               <DollarSign className="w-12 h-12 text-gray-700" />
             </div>
@@ -199,7 +199,7 @@ export function Contributor() {
                     <div className="flex items-center justify-between pt-3 border-t border-gray-800">
                       <div className="text-sm text-gray-400">Reward</div>
                       <div className="font-bold text-green-400">
-                        ${pr.reward} PyUSD
+                        ${pr.reward} USDC
                       </div>
                     </div>
                   </Card>
@@ -254,19 +254,19 @@ export function Contributor() {
               </div>
               <div className="space-y-1 mt-4">
                 <div className="text-gray-400">
-                  [2025-06-15] → awesome-blockchain #234 | $275 PyUSD ✓
+                  [2025-06-15] → awesome-blockchain #234 | $275 USDC ✓
                 </div>
                 <div className="text-gray-400">
-                  [2025-06-10] → defi-toolkit #189 | $180 PyUSD ✓
+                  [2025-06-10] → defi-toolkit #189 | $180 USDC ✓
                 </div>
                 <div className="text-gray-400">
-                  [2025-06-05] → awesome-blockchain #201 | $220 PyUSD ✓
+                  [2025-06-05] → awesome-blockchain #201 | $220 USDC ✓
                 </div>
                 <div className="text-gray-400">
-                  [2025-05-28] → web3-starter #87 | $95 PyUSD ✓
+                  [2025-05-28] → web3-starter #87 | $95 USDC ✓
                 </div>
                 <div className="text-gray-500 mt-4">
-                  Total: 22 contributions | $1,540 PyUSD earned
+                  Total: 22 contributions | $1,540 USDC earned
                 </div>
               </div>
             </div>

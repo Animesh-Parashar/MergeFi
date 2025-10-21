@@ -1,9 +1,12 @@
 
 
-# MergiFi — AI-Powered Reward Pools for Open Source Contributions
+# MergiFi — AI-Po* **Cross-Chain Rewards**: Built on **Avail** for seamless cross-chain transactions.
+* **Transparency**: All transactions are tracked and verified on-chain.
+* Enables smooth USDC transfers to contributors across supported networks.d Reward Pools for Open Source Contributions
 
-**MergiFi** is a decentralized application (DApp) that empowers maintainers to create reward pools for their repositories and pay contributors for high-quality pull requests (PRs).
-Payments, powered by **AI recommendations** and **maintainer approval**, are distributed in **PYUSD** with cross-chain support through **Avail**.
+**MergeFi** is a decentralized platform that incentivizes open-source contributions by automating rewards for merged pull requests on GitHub. 
+
+Payments, powered by **AI recommendations** and **maintainer approval**, are distributed in **USDC** with cross-chain support through **Avail**.
 
 Contributors are rewarded not only financially, they also earn **NFT badges** for their contributions and merges, which appear publicly on the **Merged PRs Page**.
 
