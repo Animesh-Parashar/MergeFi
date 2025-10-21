@@ -19,7 +19,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import ContributorsModal from '../components/ContributorsModal';
-import { CrossChainPayment } from '../components/CrossChainPayment';
+
 
 interface Repository {
   id: number;
@@ -85,8 +85,6 @@ export function Maintainer() {
     owner: '',
     repo: ''
   });
-  const [showCrossChainModal, setShowCrossChainModal] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const reposPerPage = 3;
 
@@ -229,25 +227,37 @@ export function Maintainer() {
     }
   };
 
-  const handleCrossChainPayment = (transaction: any) => {
-    if (isProcessingPayment) return; // Prevent multiple clicks
-
-    setSelectedTransaction(transaction);
-    setShowCrossChainModal(true);
-    setIsProcessingPayment(true);
+  const handleCrossChainPayment = async (transaction: any) => {
+    try {
+      setIsProcessingPayment(true);
+      console.log('Processing cross-chain payment for transaction:', transaction);
+      
+      // Here you would integrate with your RewardPaymentService
+      // Example:
+      // const paymentService = new RewardPaymentService();
+      // await paymentService.initNexus(window.ethereum);
+      // const result = await paymentService.payCrossChainPYUSD(
+      //   transaction.amount,
+      //   421614, // Source chain
+      //   11155111, // Destination chain  
+      //   transaction.contributor
+      // );
+      
+      // For now, just simulate the payment
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('Cross-chain payment completed successfully');
+      
+    } catch (error) {
+      console.error('Cross-chain payment failed:', error);
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
-  const handlePaymentComplete = (result: any) => {
-    console.log('Payment completed:', result);
-    setIsProcessingPayment(false);
-    // You might want to call an API to update the transaction status
-  };
+ 
 
-  const handleCrossChainModalClose = () => {
-    setShowCrossChainModal(false);
-    setIsProcessingPayment(false);
-    setSelectedTransaction(null);
-  };
+
+  
 
   // Pagination calculations
   const totalPages = Math.ceil(repositories.length / reposPerPage);
@@ -745,14 +755,7 @@ export function Maintainer() {
         repo={contributorsModal.repo}
       />
 
-      {/* Cross-Chain Payment Modal - Updated */}
-      <CrossChainPayment
-        isOpen={showCrossChainModal}
-        onClose={handleCrossChainModalClose}
-        recipient={selectedTransaction?.contributor || ''}
-        suggestedAmount={selectedTransaction?.amount || 0}
-        onPaymentComplete={handlePaymentComplete}
-      />
+      
     </div>
   );
 }
