@@ -79,7 +79,9 @@ const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         chainId: 11155111,
         name: 'Sepolia',
         rpcUrls: [
-            'https://eth-sepolia.g.alchemy.com/v2/klloPedupe3EmhcjwvrMm',
+            'https://eth-sepolia.g.alchemy.com/v2/X0raYEXGiZ1KXWN-gl5t2', // Replace with your key
+            //'https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID', // Replace with your key
+            'https://rpc.sepolia.org', // Fallback public RPC
         ],
         routerAddress: '0xB4345e4fb5c91017357284311C0E8b3C787DAeDC',
         pyusdAddress: '0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9',
@@ -88,12 +90,10 @@ const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     421614: {
         chainId: 421614,
         name: 'Arbitrum Sepolia',
-        rpcUrls: [
-            'https://sepolia-rollup.arbitrum.io/rpc', // Official public RPC
-            'https://arbitrum-sepolia.blockpi.network/v1/rpc/public',
-            'https://arbitrum-sepolia-rpc.publicnode.com',
-            'https://arbitrum-sepolia.gateway.tenderly.co',
-            'https://arb-sepolia.g.alchemy.com/v2/G3cXmIqjdRfdYTrWB7To2', // Keep as fallback
+       rpcUrls: [
+            'https://arb-sepolia.g.alchemy.com/v2/X0raYEXGiZ1KXWN-gl5t2', // Replace with your key
+            //'https://arbitrum-sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID', // Replace with your key
+            'https://sepolia-rollup.arbitrum.io/rpc', // Fallback public RPC
         ],
         routerAddress: '0x109c3870587220F9dee003B7089E3cb33218D8FB',
         pyusdAddress: '0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1',
@@ -500,6 +500,40 @@ export class RewardPaymentService {
             // Delay to let state settle
             await new Promise(resolve => setTimeout(resolve, 5000));
 
+            console.log(`🔍 Step 1.5: Pre-approving USDC on destination ${destConfig.name}...`);
+            this.progressCallback?.({
+                step: 'approval',
+                message: `Pre-approving USDC on destination ${destConfig.name}`
+            });
+
+            // Switch to destination chain for manual approval
+            const destChainHex = `0x${destChainId.toString(16)}`;
+            console.log(`🔄 Switching to destination chain ${destChainId} (${destChainHex})...`);
+            await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: destChainHex }],
+            });
+            await this.refreshSigner();
+
+            // Manually approve USDC on destination chain BEFORE bridging
+            const destUSDCApproval = await this.ensureTokenApproval(
+                destConfig.usdcAddress,
+                destConfig.routerAddress,
+                amountWei,
+                'USDC'
+            );
+
+            console.log('✅ Destination USDC pre-approved:', destUSDCApproval);
+
+            // Switch back to source chain
+            const sourceChainHex = `0x${sourceChainId.toString(16)}`;
+            console.log(`🔄 Switching back to source chain ${sourceChainId} (${sourceChainHex})...`);
+            await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: sourceChainHex }],
+            });
+            await this.refreshSigner();
+
             console.log(`🌉 Step 2/4: Bridging USDC from ${srcConfig.name} to ${destConfig.name} via Avail Nexus...`);
             this.progressCallback?.({
                 step: 'bridge',
@@ -551,12 +585,8 @@ export class RewardPaymentService {
                                 return {
                                     functionParams: [amountWei, recipient]
                                 };
-                            },
-                            // ✅ CRITICAL: Tell SDK to handle USDC approval on destination
-                            tokenApproval: {
-                                token: 'USDC',
-                                amount: ethers.formatUnits(amountWei, 6) // Use formatted string amount
                             }
+                            // ✅ REMOVED tokenApproval - we handled it manually above
                         }
                     });
                     break;
