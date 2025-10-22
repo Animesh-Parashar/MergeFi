@@ -1,5 +1,7 @@
-const contributorcontrol = async (req,res)=>{
- const { github_token } = req.cookies;
+import axios from 'axios';
+
+export const contributorcontrol = async (req, res) => {
+  const { github_token } = req.cookies;
 
   if (!github_token) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -57,10 +59,6 @@ const contributorcontrol = async (req,res)=>{
       total_repos_contributed: contributedRepos.length,
       total_owned_repos: allRepos.filter(repo => !repo.fork && repo.owner.login === user.login).length,
       total_forked_repos: allRepos.filter(repo => repo.fork).length,
-      recent_activity_count: recentContributions.length,
-      push_events: events.filter(e => e.type === 'PushEvent').length,
-      pr_events: events.filter(e => e.type === 'PullRequestEvent').length,
-      issue_events: events.filter(e => e.type === 'IssuesEvent').length,
       total_public_repos: user.public_repos,
       followers: user.followers,
       following: user.following
@@ -107,7 +105,117 @@ const contributorcontrol = async (req,res)=>{
       message: err.message 
     });
   }
+};
 
-}
+export const getContributorStats = async (req, res) => {
+  try {
+    const { github_token } = req.cookies;
+    
+    if (!github_token) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
 
-export {contributorcontrol};
+    // First get user info
+    const userRes = await axios.get('https://api.github.com/user', {
+      headers: { 
+        Authorization: `Bearer ${github_token}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+
+    const user = userRes.data;
+
+    // Fetch user's pull requests
+    const searchResponse = await axios.get(
+      `https://api.github.com/search/issues?q=author:${user.login}+type:pr+is:merged`,
+      {
+        headers: {
+          Authorization: `Bearer ${github_token}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      }
+    );
+
+    const mergedPRs = searchResponse.data.items.slice(0, 10).map(pr => ({
+      id: pr.id,
+      repo: pr.repository_url.split('/').slice(-2).join('/'),
+      pr: `#${pr.number}`,
+      title: pr.title,
+      date: new Date(pr.closed_at).toISOString().split('T')[0],
+      url: pr.html_url,
+    }));
+
+    // Get repository contribution counts
+    const repoContributions = {};
+    mergedPRs.forEach(pr => {
+      repoContributions[pr.repo] = (repoContributions[pr.repo] || 0) + 1;
+    });
+
+    const badges = Object.entries(repoContributions).map(([repo, count]) => {
+      let level = 'Bronze';
+      let color = 'from-orange-700 to-orange-500';
+      
+      if (count >= 10) {
+        level = 'Gold';
+        color = 'from-yellow-600 to-yellow-400';
+      } else if (count >= 5) {
+        level = 'Silver';
+        color = 'from-gray-500 to-gray-300';
+      }
+
+      return {
+        name: repo,
+        contributions: count,
+        level,
+        color,
+      };
+    });
+
+    // Fetch user's repositories for contribution stats
+    const reposResponse = await axios.get(
+      `https://api.github.com/user/repos?per_page=100&sort=updated`,
+      {
+        headers: {
+          Authorization: `Bearer ${github_token}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      }
+    );
+
+    const stats = {
+      totalPRs: searchResponse.data.total_count,
+      totalRepos: Object.keys(repoContributions).length,
+      mergedPRs: mergedPRs,
+      badges: badges,
+      user: user,
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching contributor stats:', error.message);
+    res.status(500).json({ error: 'Failed to fetch contributor stats' });
+  }
+};
+
+export const getContributorEarnings = async (req, res) => {
+  try {
+    // This would integrate with your blockchain contract
+    // For now, returning mock data structure
+    const earningsData = [
+      { month: 'Jan', earnings: 0 },
+      { month: 'Feb', earnings: 0 },
+      { month: 'Mar', earnings: 0 },
+      { month: 'Apr', earnings: 0 },
+      { month: 'May', earnings: 0 },
+      { month: 'Jun', earnings: 0 },
+    ];
+
+    res.json({
+      totalEarnings: 0,
+      earningsData: earningsData,
+    });
+  } catch (error) {
+    console.error('Error fetching earnings:', error.message);
+    res.status(500).json({ error: 'Failed to fetch earnings' });
+  }
+};
