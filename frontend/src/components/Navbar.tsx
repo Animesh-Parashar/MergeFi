@@ -125,7 +125,6 @@ export function Navbar() {
     { path: '/', label: 'Home', icon: Home },
     { path: '/maintainer', label: 'Maintainer', icon: User },
     { path: '/contributor', label: 'Contributor', icon: Users },
-    { path: '/owner', label: 'Owner', icon: Shield },
     { path: '/transactions', label: 'Transactions', icon: Activity },
   ];
 

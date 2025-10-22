@@ -5,7 +5,7 @@ import { AppWagmiProvider } from './providers/WagmiProvider';
 import { Home } from './pages/Home';
 import { Maintainer } from './pages/Maintainer';
 import { Contributor } from './pages/Contributor';
-import { Owner } from './pages/Owner';
+// import { Owner } from './pages/Owner';
 import { Transactions } from './pages/Transactions';
 
 function App() {
