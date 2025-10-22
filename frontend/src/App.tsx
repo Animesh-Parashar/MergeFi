@@ -6,6 +6,7 @@ import { Home } from './pages/Home';
 import { Maintainer } from './pages/Maintainer';
 import { Contributor } from './pages/Contributor';
 import { Owner } from './pages/Owner';
+import { Transactions } from './pages/Transactions';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
                 <Route path="/maintainer" element={<Maintainer />} />
                 <Route path="/contributor" element={<Contributor />} />
                 <Route path="/owner" element={<Owner />} />
+                <Route path="/transactions" element={<Transactions />} />
               </Routes>
             </div>
           </div>
