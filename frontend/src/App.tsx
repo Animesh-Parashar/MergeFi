@@ -26,7 +26,6 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/maintainer" element={<Maintainer />} />
                 <Route path="/contributor" element={<Contributor />} />
-                <Route path="/owner" element={<Owner />} />
                 <Route path="/transactions" element={<Transactions />} />
               </Routes>
             </div>

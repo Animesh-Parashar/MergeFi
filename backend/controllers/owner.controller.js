@@ -1,3 +1,6 @@
+import axios from 'axios';
+import { supabase } from '../utils/supabase.js';
+
 const ownercontrol = async (req,res)=>{
     const { github_token } = req.cookies;
 
@@ -147,5 +150,150 @@ const ownercontrol = async (req,res)=>{
     });
   }
 }
+
+export const listRepository = async (req, res) => {
+  try {
+    const { github_token } = req.cookies;
+    
+    if (!github_token) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const {
+      github_repo_id,
+      owner,
+      repo,
+      name,
+      full_name,
+      description,
+      html_url,
+      language,
+      stargazers_count,
+      forks_count,
+    } = req.body;
+
+    if (!github_repo_id || !owner || !repo) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Check if repo is already listed
+    const { data: existing, error: checkError } = await supabase
+      .from('listed_repositories')
+      .select('*')
+      .eq('github_repo_id', github_repo_id)
+      .single();
+
+    if (existing) {
+      return res.status(400).json({ error: 'Repository already listed' });
+    }
+
+    // Insert into Supabase
+    const { data, error } = await supabase
+      .from('listed_repositories')
+      .insert([
+        {
+          github_repo_id,
+          owner,
+          repo,
+          name,
+          full_name,
+          description,
+          html_url,
+          language,
+          stargazers_count,
+          forks_count,
+          is_open: true,
+          listed_at: new Date().toISOString(),
+        },
+      ])
+      .select();
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(500).json({ error: 'Failed to list repository' });
+    }
+
+    res.json({ success: true, data: data[0] });
+  } catch (error) {
+    console.error('Error listing repository:', error);
+    res.status(500).json({ error: 'Failed to list repository' });
+  }
+};
+
+export const unlistRepository = async (req, res) => {
+  try {
+    const { github_token } = req.cookies;
+    
+    if (!github_token) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { github_repo_id } = req.body;
+
+    if (!github_repo_id) {
+      return res.status(400).json({ error: 'Missing repository ID' });
+    }
+
+    // Delete from Supabase
+    const { error } = await supabase
+      .from('listed_repositories')
+      .delete()
+      .eq('github_repo_id', github_repo_id);
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(500).json({ error: 'Failed to unlist repository' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error unlisting repository:', error);
+    res.status(500).json({ error: 'Failed to unlist repository' });
+  }
+};
+
+export const getListedRepositories = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('listed_repositories')
+      .select('*')
+      .eq('is_open', true)
+      .order('listed_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(500).json({ error: 'Failed to fetch repositories' });
+    }
+
+    res.json({ success: true, repos: data || [] });
+  } catch (error) {
+    console.error('Error fetching listed repositories:', error);
+    res.status(500).json({ error: 'Failed to fetch repositories' });
+  }
+};
+
+export const getUserListedRepositories = async (req, res) => {
+  try {
+    const { github_token } = req.cookies;
+    
+    if (!github_token) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { data, error } = await supabase
+      .from('listed_repositories')
+      .select('github_repo_id');
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(500).json({ error: 'Failed to fetch repositories' });
+    }
+
+    res.json({ success: true, repos: data || [] });
+  } catch (error) {
+    console.error('Error fetching user repositories:', error);
+    res.status(500).json({ error: 'Failed to fetch repositories' });
+  }
+};
 
 export {ownercontrol};
