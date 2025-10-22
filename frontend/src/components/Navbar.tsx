@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, User, Users, Shield, ChevronDown, Wallet, Copy, Check } from 'lucide-react';
+import { Home, User, Users, ChevronDown, Wallet, Copy, Check } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
 import { sepolia, arbitrumSepolia } from 'wagmi/chains';
@@ -125,7 +125,6 @@ export function Navbar() {
     { path: '/', label: 'Home', icon: Home },
     { path: '/maintainer', label: 'Maintainer', icon: User },
     { path: '/contributor', label: 'Contributor', icon: Users },
-    { path: '/owner', label: 'Owner', icon: Shield },
   ];
 
   const formatAddress = (address: string) => {

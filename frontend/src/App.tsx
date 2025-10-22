@@ -5,7 +5,6 @@ import { AppWagmiProvider } from './providers/WagmiProvider';
 import { Home } from './pages/Home';
 import { Maintainer } from './pages/Maintainer';
 import { Contributor } from './pages/Contributor';
-import { Owner } from './pages/Owner';
 
 function App() {
   return (
@@ -25,7 +24,6 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/maintainer" element={<Maintainer />} />
                 <Route path="/contributor" element={<Contributor />} />
-                <Route path="/owner" element={<Owner />} />
               </Routes>
             </div>
           </div>

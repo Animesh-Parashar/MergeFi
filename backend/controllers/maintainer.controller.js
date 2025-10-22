@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const maintainercontrol = async (req, res) => {
+export const maintainercontrol = async (req, res) => {
   const { github_token } = req.cookies;
 
   if (!github_token) {
@@ -133,10 +133,13 @@ const maintainercontrol = async (req, res) => {
       message: err.message
     });
   }
-}
+};
+
+// Alias for getMaintainerStats - same as maintainercontrol
+export const getMaintainerStats = maintainercontrol;
 
 // New route to get contributors for a specific repository
-const getRepoContributors = async (req, res) => {
+export const getRepoContributors = async (req, res) => {
   const { github_token } = req.cookies;
   const { owner, repo } = req.params;
 
@@ -233,5 +236,3 @@ const getRepoContributors = async (req, res) => {
     });
   }
 };
-
-export { maintainercontrol, getRepoContributors };

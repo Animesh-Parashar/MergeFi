@@ -5,7 +5,6 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { getAllRegisteredRepos } from '../utils/contracts';
 
 export function Home() {
   const [showTerminal, setShowTerminal] = useState(false);
@@ -13,14 +12,14 @@ export function Home() {
   const [currentInput, setCurrentInput] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [currentStep, setCurrentStep] = useState('initial'); // initial, connected, ls, choose
+  const [currentStep, setCurrentStep] = useState('initial');
   const [availableOptions, setAvailableOptions] = useState<string[]>([]);
   const [showCursor, setShowCursor] = useState(true);
   const [githubUser, setGithubUser] = useState<any>(null);
-  const [authProcessed, setAuthProcessed] = useState(false); // Add this new state
+  const [authProcessed, setAuthProcessed] = useState(false);
   const [registeredRepos, setRegisteredRepos] = useState<any[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(true);
-  const [selectedNetwork, setSelectedNetwork] = useState<'sepolia' | 'arbitrumSepolia'>('sepolia');
+
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -63,7 +62,7 @@ export function Home() {
 
   useEffect(() => {
     fetchRegisteredRepos();
-  }, [selectedNetwork]);
+  }, []);
 
   const checkAuthStatus = async () => {
     try {
@@ -99,16 +98,20 @@ export function Home() {
 
   const fetchRegisteredRepos = async () => {
     setLoadingRepos(true);
-    const result = await getAllRegisteredRepos(selectedNetwork);
-    if (result.success) {
-      setRegisteredRepos(result.repos);
+    try {
+      const response = await axios.get('http://localhost:5000/api/repos/all-listed');
+      if (response.data.success) {
+        setRegisteredRepos(response.data.repos);
+      }
+    } catch (error) {
+      console.error('Error fetching listed repos:', error);
     }
     setLoadingRepos(false);
   };
 
   const handleGitHubConnect = () => {
     setShowTerminal(true);
-    setAuthProcessed(false); // Reset auth processed state
+    setAuthProcessed(false);
     setTerminalLines([
       'MergeFi Terminal v1.0.0',
       'Initializing GitHub OAuth connection...',
@@ -364,15 +367,16 @@ export function Home() {
     setTerminalLines([]);
     setCurrentInput('');
     setIsConnecting(false);
-    setAuthProcessed(false); // Reset auth processed state when closing
-    // Don't reset isConnected and githubUser as they should persist
+    setAuthProcessed(false);
     setCurrentStep(isConnected ? 'connected' : 'initial');
     setAvailableOptions([]);
   };
 
   return (
     <div className="min-h-screen bg-black text-white font-mono">
+      {/* Hero Section */}
       <section className="relative px-6 py-20 lg:px-12 overflow-hidden">
+        {/* ...existing hero content... */}
         <div className="absolute inset-0 opacity-5 pointer-events-none">
           <div className="grid grid-cols-20 gap-1 h-full">
             {Array.from({ length: 100 }).map((_, i) => (
@@ -415,24 +419,41 @@ export function Home() {
               MergeFi bridges the gap between open source work and fair compensation.
             </p>
 
-            <div className="flex justify-center items-center">
-              <button
-                onClick={handleGitHubConnect}
-                className="group relative"
-              >
-                <div className="absolute inset-0 border-2 border-dashed border-gray-600 bg-gray-900/20 transition-all duration-300 group-hover:border-gray-400 group-hover:shadow-lg group-hover:shadow-white/10"></div>
-                <div className="relative border-2 border-dashed border-gray-400 bg-transparent text-white font-bold px-8 py-3 text-base transition-all duration-300 group-hover:border-gray-300 group-hover:bg-gray-900/30 transform translate-x-1 translate-y-1 group-hover:translate-x-0 group-hover:translate-y-0">
-                  <span className="flex items-center gap-3">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clipRule="evenodd" />
-                    </svg>
-                    Connect to GitHub
-                  </span>
+            <div className="flex justify-center items-center gap-4">
+              {isConnected && githubUser ? (
+                <div className="flex items-center gap-4">
+                  <div className="group relative">
+                    <div className="absolute inset-0 border-2 border-dashed border-gray-600 bg-gray-900/20"></div>
+                    <div className="relative border-2 border-dashed border-gray-400 bg-transparent px-6 py-3 transform translate-x-1 translate-y-1">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-green-400">Connected to GitHub</span>
+                        <span className="text-gray-500">•</span>
+                        <span className="text-gray-400">@{githubUser.login}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </button>
+              ) : (
+                <button
+                  onClick={handleGitHubConnect}
+                  className="group relative"
+                >
+                  <div className="absolute inset-0 border-2 border-dashed border-gray-600 bg-gray-900/20 transition-all duration-300 group-hover:border-gray-400 group-hover:shadow-lg group-hover:shadow-white/10"></div>
+                  <div className="relative border-2 border-dashed border-gray-400 bg-transparent text-white font-bold px-8 py-3 text-base transition-all duration-300 group_hover:border-gray-300 group_hover:bg-gray-900/30 transform translate-x-1 translate-y-1 group-hover:translate-x-0 group-hover:translate-y-0">
+                    <span className="flex items-center gap-3">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clipRule="evenodd" />
+                      </svg>
+                      Connect to GitHub
+                    </span>
+                  </div>
+                </button>
+              )}
             </div>
           </motion.div>
 
+          {/* Terminal Status Card */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
@@ -599,8 +620,8 @@ export function Home() {
         />
       )}
 
-      {/* Rest of the existing sections */}
-      <section className="px-6 py-20 lg:px-12 border-t border-gray-900">
+      {/* How It Works Section - same as before */}
+      <section className="px-6 py-20 lg:px-12 border-t border-gray-800">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -608,161 +629,78 @@ export function Home() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-3xl lg:text-5xl font-bold mb-6">How It Works</h2>
-            <p className="text-xl text-gray-400">
-              A seamless flow from contribution to compensation
+            <h2 className="text-4xl lg:text-5xl font-bold mb-6">
+              Open for Contributions
+            </h2>
+            <p className="text-gray-400 text-lg">
+              Discover repositories actively seeking contributors with reward pools
             </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-4 gap-6">
-            {[
-              {
-                step: '01',
-                title: 'Maintainer Creates Pool',
-                description: 'Repository owners set up reward pools with USDC',
-                icon: Coins,
-              },
-              {
-                step: '02',
-                title: 'Contributor Submits PR',
-                description: 'Contributors work on verified repositories',
-                icon: GitBranch,
-              },
-              {
-                step: '03',
-                title: 'AI-Assisted Review',
-                description: 'Smart verification and reward calculation',
-                icon: Shield,
-              },
-              {
-                step: '04',
-                title: 'Earn & Badge',
-                description: 'Get paid in USDC and earn NFT badges',
-                icon: Award,
-              },
-            ].map((item, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card hover>
-                  <div className="text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-900 border border-gray-700 flex items-center justify-center">
-                      <item.icon className="w-8 h-8 text-white" />
-                    </div>
-                    <div className="text-gray-500 text-sm mb-2">{item.step}</div>
-                    <h3 className="text-lg font-bold mb-3">{item.title}</h3>
-                    <p className="text-gray-400 text-sm leading-relaxed">
-                      {item.description}
-                    </p>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Registered Repositories Section - Add after "How It Works" section */}
-      <section className="px-6 py-20 lg:px-12 border-t border-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-3xl lg:text-5xl font-bold mb-6">Open for Contributions</h2>
-            <p className="text-xl text-gray-400 mb-8">
-              Verified repositories accepting contributions with reward pools
-            </p>
-
-            {/* Network Selector */}
-            <div className="flex items-center justify-center gap-2 mb-8">
-              <span className="text-sm text-gray-400">Network:</span>
-              <select
-                value={selectedNetwork}
-                onChange={(e) => setSelectedNetwork(e.target.value as 'sepolia' | 'arbitrumSepolia')}
-                className="bg-gray-900 border border-gray-700 rounded px-4 py-2 text-white"
-              >
-                <option value="sepolia">Ethereum Sepolia</option>
-                <option value="arbitrumSepolia">Arbitrum Sepolia</option>
-              </select>
-            </div>
           </motion.div>
 
           {loadingRepos ? (
-            <div className="text-center text-gray-400">
-              <div className="animate-pulse">Loading repositories...</div>
+            <div className="flex justify-center items-center py-12">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 border-2 border-gray-600 border-t-white rounded-full animate-spin"></div>
+                <span className="text-gray-400">Loading repositories...</span>
+              </div>
             </div>
           ) : registeredRepos.length === 0 ? (
-            <div className="text-center text-gray-400">
-              <p>No repositories registered yet on {selectedNetwork === 'sepolia' ? 'Ethereum Sepolia' : 'Arbitrum Sepolia'}</p>
+            <div className="text-center py-12">
+              <p className="text-gray-400">No repositories open for contributions yet</p>
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {registeredRepos.map((repo, index) => (
                 <motion.div
-                  key={index}
+                  key={repo.github_repo_id}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1 }}
                 >
                   <Card hover className="h-full">
-                    <div className="space-y-4">
-                      <div className="flex items-start justify-between">
+                    <div className="flex flex-col h-full">
+                      <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <GitBranch className="w-5 h-5 text-gray-400" />
-                            <span className="font-bold">{repo.name}</span>
-                            {repo.verified && (
-                              <CheckCircle className="w-4 h-4 text-green-400" />
-                            )}
+                          <h3 className="font-bold text-lg mb-2">{repo.name}</h3>
+                          <p className="text-sm text-gray-400 mb-3 line-clamp-2">
+                            {repo.description || 'No description provided'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 mb-4 text-sm text-gray-400">
+                        {repo.language && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                            <span>{repo.language}</span>
                           </div>
-                          <a
-                            href={repo.githubUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-blue-400 hover:text-blue-300 break-all"
-                          >
-                            {repo.githubUrl}
-                          </a>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          <span>{repo.stargazers_count || 0}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                          </svg>
+                          <span>{repo.forks_count || 0}</span>
                         </div>
                       </div>
 
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Reward Pool:</span>
-                          <span className="font-bold text-green-400">
-                            ${parseFloat(repo.totalFunding).toLocaleString()} PyUSD
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Contributors:</span>
-                          <span>{repo.contributorCount}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Maintainer:</span>
-                          <span className="font-mono text-xs">
-                            {repo.maintainer.slice(0, 6)}...{repo.maintainer.slice(-4)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pt-4 border-t border-gray-800">
+                      <div className="mt-auto pt-4 border-t border-gray-800">
                         <a
-                          href={repo.githubUrl}
+                          href={repo.html_url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          className="flex items-center justify-between text-sm hover:text-gray-300 transition-colors"
                         >
-                          <Button className="w-full" variant="outline">
-                            <GitBranch className="w-4 h-4 mr-2" />
-                            Start Contributing
-                          </Button>
+                          <span>{repo.full_name}</span>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
                         </a>
                       </div>
                     </div>
