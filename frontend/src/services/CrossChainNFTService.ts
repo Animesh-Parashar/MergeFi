@@ -6,7 +6,7 @@ import {
     BridgeAndExecuteSimulationResult,
     TOKEN_METADATA
 } from '@avail-project/nexus-core';
-import { parseUnits } from 'ethers';
+import { parseUnits, ethers, BrowserProvider, Contract } from 'ethers';
 
 // Supported chain IDs for cross-chain NFT minting
 export const SUPPORTED_CHAIN_IDS = {
@@ -18,9 +18,6 @@ export const SUPPORTED_CHAIN_IDS = {
     MONAD_TESTNET: 10143,
 } as const;
 
-// Hardcoded NFT Contract Address (deployed on target chain)
-// TODO: Replace with your actual deployed ContributorNFT contract address
-const NFT_CONTRACT_ADDRESS = '';
 
 // Chain names for display
 export const CHAIN_NAMES: Record<number, string> = {
@@ -57,17 +54,56 @@ export interface NFTMintResult {
 }
 
 const contractaddress_mapping: Record<number, string> = {
-    11155420: "0xFd1feBA71394E0AF5F97ea6365fe86870B36c112",
-    80002: '0x',
-    421614: "0x317Dfb49E7a0864536102E5644b60297854a2AF7",
-    84532: "0xFd1feBA71394E0AF5F97ea6365fe86870B36c112",
-    11155111: "0x5627f1EdD6332f321B0a8B7e5D62C2A903B02FC5",
-    10143: "0xFd1feBA71394E0AF5F97ea6365fe86870B36c112",
+    11155420: "0x8c920A7cd5862f3c2ec8269EC1baB3071F51788C",
+    //80002: "0xFd1feBA71394E0AF5F97ea6365fe86870B36c112", // Added placeholder - update with actual address
+    421614: "0x673eC263392486Aa19621c4B12D90A39f0ce72d0",
+    84532: "0x8c920A7cd5862f3c2ec8269EC1baB3071F51788C",
+    11155111: "0xCA112fDC81d36dA813F4B6D734aCaf9F4906947b",
+    //10143: "0xFd1feBA71394E0AF5F97ea6365fe86870B36c112",
 };
 
-/**
- * ContributorNFT Contract ABI (only the functions we need)
- */
+
+// USDC Token Addresses on Testnets
+const USDC_ADDRESSES: Record<number, string> = {
+    11155111: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Sepolia
+    11155420: "0x5fd84259d66Cd46123540766Be93DFE6D43130D7", // Optimism Sepolia
+    421614: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",   // Arbitrum Sepolia
+    84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",    // Base Sepolia
+    80002: "0x9999f7Fea5938fD3b1E26A12c3f2fb024e194f97",    // Polygon Amoy
+};
+
+// ERC20 ABI for approve function
+const ERC20_ABI = [
+    {
+        inputs: [
+            { internalType: 'address', name: 'spender', type: 'address' },
+            { internalType: 'uint256', name: 'amount', type: 'uint256' }
+        ],
+        name: 'approve',
+        outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+        stateMutability: 'nonpayable',
+        type: 'function'
+    },
+    {
+        inputs: [
+            { internalType: 'address', name: 'owner', type: 'address' },
+            { internalType: 'address', name: 'spender', type: 'address' }
+        ],
+        name: 'allowance',
+        outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function'
+    },
+    {
+        inputs: [{ internalType: 'address', name: 'account', type: 'address' }],
+        name: 'balanceOf',
+        outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function'
+    }
+] as const;
+
+
 const CONTRIBUTOR_NFT_ABI = [
     {
         inputs: [
@@ -83,13 +119,6 @@ const CONTRIBUTOR_NFT_ABI = [
     },
 ] as const;
 
-/**
- * Mint NFTs for contributors across chains using Avail Nexus SDK
- * Uses individual mintRewardNFT calls for each contributor
- * 
- * @param params - NFT minting parameters including contributors, repo name, and chain details
- * @returns Promise with transaction result and simulation data
- */
 
 // Cross-chain NFT minting parameters
 export interface CrossChainNFTParams {
@@ -102,11 +131,61 @@ export interface CrossChainNFTParams {
 }
 
 /**
- * Mint cross-chain reward NFT with source/destination chain info
- * 
- * @param params - Cross-chain NFT minting parameters
- * @returns Promise with transaction result
+ * Approve USDC spending for the contract on destination chain
  */
+async function approveUSDCForContract(
+    provider: any,
+    contractAddress: string,
+    amount: string,
+    chainId: number
+): Promise<string> {
+    console.log('📝 Approving USDC for contract...');
+
+    const usdcAddress = USDC_ADDRESSES[chainId];
+    if (!usdcAddress) {
+        throw new Error(`USDC address not configured for chain ${chainId}`);
+    }
+
+    const ethersProvider = new BrowserProvider(provider);
+    const signer = await ethersProvider.getSigner();
+    const userAddress = await signer.getAddress();
+
+    const usdcContract = new Contract(usdcAddress, ERC20_ABI, signer);
+
+    // Parse amount to wei
+    const amountWei = parseUnits(amount, 6); // USDC has 6 decimals
+
+    // Check current balance
+    const balance = await usdcContract.balanceOf(userAddress);
+    console.log('💰 USDC Balance:', ethers.formatUnits(balance, 6), 'USDC');
+
+    if (balance < amountWei) {
+        throw new Error(
+            `Insufficient USDC balance. Have: ${ethers.formatUnits(balance, 6)} USDC, Need: ${amount} USDC`
+        );
+    }
+
+    // Check current allowance
+    const currentAllowance = await usdcContract.allowance(userAddress, contractAddress);
+    console.log('Current Allowance:', ethers.formatUnits(currentAllowance, 6), 'USDC');
+
+    // If allowance is sufficient, skip approval
+    if (currentAllowance >= amountWei) {
+        console.log('✅ Sufficient allowance already exists');
+        return 'sufficient_allowance';
+    }
+
+    // Approve the contract to spend USDC
+    console.log(`Approving ${amount} USDC for contract ${contractAddress}...`);
+    const approveTx = await usdcContract.approve(contractAddress, amountWei);
+
+    console.log('⏳ Waiting for approval transaction:', approveTx.hash);
+    const receipt = await approveTx.wait();
+
+    console.log('✅ USDC approved! Transaction hash:', receipt.hash);
+    return receipt.hash;
+}
+
 export const mintCrossChainRewardNFT = async (
     params: CrossChainNFTParams
 ): Promise<BridgeAndExecuteResult> => {
@@ -126,144 +205,96 @@ export const mintCrossChainRewardNFT = async (
     if (!amount || parseFloat(amount) <= 0) {
         throw new Error('Amount must be greater than 0');
     }
+    if (!contractaddress_mapping[toChainId]) {
+        throw new Error(`No contract address configured for chain ID ${toChainId}`);
+    }
+    if (!sourceChains || sourceChains.length === 0) {
+        throw new Error('Source chains array cannot be empty');
+    }
 
-    // Get chain names from chain IDs
-    const sourceChain = getChainName(sourceChains[0]);
-    const destinationChain = getChainName(toChainId);
-
-    console.log('=== Cross-Chain NFT Minting ===');
-    console.log('Source Chain:', sourceChain);
-    console.log('Destination Chain:', destinationChain);
-    console.log('Amount:', amount, 'USDC');
-    console.log('Wallet Address:', walletAddress);
-    console.log('Target Chain ID:', toChainId);
-    console.log('===============================');
-
-    // Get Ethereum provider from browser
     const ethProvider = (window.ethereum as any);
     if (!ethProvider) {
         throw new Error('Ethereum provider not found. Please install MetaMask or another Web3 wallet.');
     }
 
+    const currentChainId = await ethProvider.request({ method: 'eth_chainId' });
+    const currentChainIdDecimal = parseInt(currentChainId, 16);
+
+    console.log('=== Cross-Chain NFT Minting ===');
+    console.log('Current Chain:', getChainName(currentChainIdDecimal));
+    console.log('Destination Chain:', getChainName(toChainId));
+    console.log('Amount:', amount, 'USDC');
+    console.log('Contributor:', walletAddress);
+    console.log('===============================');
+
     // Initialize Nexus SDK
     const sdk = new NexusSDK({ network: 'testnet' });
     await sdk.initialize(ethProvider);
 
-    const amountWei = parseUnits(amount, TOKEN_METADATA['USDC'].decimals);
+    const actualSourceChains = [currentChainIdDecimal];
 
-    // Build bridge and execute parameters for cross-chain minting
-    const bridgeParams: BridgeAndExecuteParams = {
+    // STEP 1: Manually approve USDC for the contract on destination chain
+    try {
+        console.log('\n🔐 Step 1: Approving USDC for contract on destination chain...');
+        const approvalTxHash = await approveUSDCForContract(
+            ethProvider,
+            contractaddress_mapping[toChainId],
+            amount,
+            toChainId
+        );
+        console.log('Approval Transaction:', approvalTxHash);
+    } catch (approvalError: any) {
+        console.error('❌ USDC Approval failed:', approvalError);
+        throw new Error(`Failed to approve USDC: ${approvalError.message}`);
+    }
+
+    // STEP 2: Execute bridge and contract call
+    console.log('\n🌉 Step 2: Executing bridge and NFT minting...');
+    const bridgeAndExecuteResult: BridgeAndExecuteResult = await sdk.bridgeAndExecute({
         token: 'USDC',
         amount: amount,
         toChainId: toChainId,
-        sourceChains: sourceChains,
+        sourceChains: actualSourceChains,
         execute: {
             contractAddress: contractaddress_mapping[toChainId],
             contractAbi: CONTRIBUTOR_NFT_ABI,
             functionName: 'mintRewardNFT',
-            buildFunctionParams: () => {
+            buildFunctionParams: (token, amt, _chainId, _userAddress) => {
+                const decimals = TOKEN_METADATA[token].decimals;
+                const amountWei = parseUnits(amt, decimals);
+
+                console.log('Building function params:');
+                console.log('  - Contributor:', walletAddress);
+                console.log('  - Amount:', amt, 'USDC');
+                console.log('  - Repo:', reponame);
+                console.log('  - Name:', contributorname);
+
                 return {
                     functionParams: [
-                        walletAddress,                              // contributor (address)
-                        amountWei,                                  // amount (uint256)
-                       reponame,         // repoName (string)
-                        contributorname,      // contributorName (string)
+                        walletAddress,
+                        amountWei,
+                        reponame,
+                        contributorname,
                     ],
                 };
             },
-            tokenApproval: {
-                token: 'USDC',
-                amount: amount,
-            },
+            // ✅ No tokenApproval here - we did it manually above
         },
         waitForReceipt: true,
-    };
+    } as BridgeAndExecuteParams);
 
-    // Simulate the transaction first
-    console.log('Simulating cross-chain NFT minting...');
-    const simulation: BridgeAndExecuteSimulationResult = await sdk.simulateBridgeAndExecute(bridgeParams);
-
-    console.log('Simulation Results:');
-    console.log('- Steps:', simulation.steps);
-    console.log('- Total estimated cost:', simulation.totalEstimatedCost);
-
-    // Execute the bridge and mint transaction
-    console.log('Executing cross-chain NFT minting...');
-    const bridgeAndExecuteResult: BridgeAndExecuteResult = await sdk.bridgeAndExecute(bridgeParams);
-
-    console.log('Cross-chain NFT minting completed!');
+    console.log('✅ Cross-chain NFT minting completed!');
     console.log('Transaction result:', bridgeAndExecuteResult);
 
     return bridgeAndExecuteResult;
 };
 
-/**
- * Simulate NFT minting without executing the transaction
- * Useful for displaying gas estimates and validating parameters
- * 
- * @param params - NFT minting parameters
- * @returns Promise with simulation results
- */
-export const simulateNFTMinting = async (
-    params: NFTMintParams
-): Promise<BridgeAndExecuteSimulationResult> => {
-    const {
-        contributors,
-        repoName,
-        toChainId,
-        sourceChains,
-    } = params;
 
-    const ethProvider = (window.ethereum as any);
-    if (!ethProvider) {
-        throw new Error('Ethereum provider not found');
-    }
 
-    const sdk = new NexusSDK({ network: 'testnet' });
-    await sdk.initialize(ethProvider);
-
-    // Simulate for the first contributor as a representative example
-    const firstContributor = contributors[0];
-    const contributorAmount = parseUnits(firstContributor.amount.toString(), TOKEN_METADATA['USDC'].decimals);
-
-    const bridgeParams: BridgeAndExecuteParams = {
-        token: 'USDC',
-        amount: firstContributor.amount.toString(),
-        toChainId: toChainId,
-        sourceChains: sourceChains,
-        execute: {
-            contractAddress: NFT_CONTRACT_ADDRESS,
-            contractAbi: CONTRIBUTOR_NFT_ABI,
-            functionName: 'mintRewardNFT',
-            buildFunctionParams: () => ({
-                functionParams: [
-                    firstContributor.address,
-                    contributorAmount,
-                    repoName,
-                    firstContributor.name,
-                ],
-            }),
-            tokenApproval: {
-                token: 'USDC',
-                amount: firstContributor.amount.toString(),
-            },
-        },
-        waitForReceipt: false,
-    };
-
-    return await sdk.simulateBridgeAndExecute(bridgeParams);
-};
-
-/**
- * Get chain name by chain ID
- */
 export const getChainName = (chainId: number): string => {
     return CHAIN_NAMES[chainId] || `Chain ${chainId}`;
 };
 
-/**
- * Validate if a chain ID is supported
- */
 export const isSupportedChain = (chainId: number): boolean => {
     return Object.values(SUPPORTED_CHAIN_IDS).includes(chainId as any);
 };
