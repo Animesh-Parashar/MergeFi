@@ -2,13 +2,17 @@ import express from 'express';
 import {
   contributorcontrol,
   getContributorStats,
-  getContributorEarnings
+  getContributorEarnings,
 } from '../controllers/contributor.controller.js';
 import {
   maintainercontrol,
   getMaintainerStats,
   getRepoContributors,
-  getRepoContributorsWithWallets
+  getRepoContributorsWithWallets,
+  getContributorCommits,
+  getContributorMergedPRs,
+  getPRAnalysisData,
+  getGeminiAnalysis
 } from '../controllers/maintainer.controller.js';
 import {
   listRepository,
@@ -30,6 +34,11 @@ router.get('/maintainer/stats', getMaintainerStats);
 router.get('/maintainer', maintainercontrol);
 router.get('/maintainer/:owner/:repo/contributors', getRepoContributors);
 router.get('/maintainer/:owner/:repo/contributors-wallets', getRepoContributorsWithWallets);
+router.get('/maintainer/:owner/:repo/:username/commits', getContributorCommits);
+router.get('/maintainer/:owner/:repo/:username/merged-prs', getContributorMergedPRs);
+router.get('/maintainer/:owner/:repo/pr-data/:prNumber', getPRAnalysisData);
+router.post('/ai/analyze-pr', getGeminiAnalysis);
+
 
 // Repository listing routes
 router.post('/repos/list', listRepository);

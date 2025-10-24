@@ -420,7 +420,7 @@ export function Home() {
             </p>
 
             <div className="flex justify-center items-center gap-4">
-              {isConnected && githubUser ? (
+              {/* {isConnected && githubUser ? (
                 <div className="flex items-center gap-4">
                   <div className="group relative">
                     <div className="absolute inset-0 border-2 border-dashed border-gray-600 bg-gray-900/20"></div>
@@ -434,7 +434,7 @@ export function Home() {
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : ( */}
                 <button
                   onClick={handleGitHubConnect}
                   className="group relative"
@@ -449,7 +449,7 @@ export function Home() {
                     </span>
                   </div>
                 </button>
-              )}
+              {/* )} */}
             </div>
           </motion.div>
 

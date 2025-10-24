@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import AnalysisModal from "./AnalysisModal.tsx";
 
 interface Contributor {
   id: number;
@@ -27,37 +28,49 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
   isOpen,
   onClose,
   owner,
-  repo
+  repo,
 }) => {
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<any>(null);
+  const [selectedContributor, setSelectedContributor] =
+    useState<Contributor | null>(null);
 
   useEffect(() => {
     if (isOpen && owner && repo) {
       fetchContributors();
+    } // Reset selected contributor when modal re-opens
+    if (!isOpen) {
+      setSelectedContributor(null);
     }
   }, [isOpen, owner, repo]);
 
   const fetchContributors = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/maintainer/${owner}/${repo}/contributors`, {
-        credentials: 'include'
-      });
+      const response = await fetch(
+        `http://localhost:5000/api/maintainer/${owner}/${repo}/contributors`,
+        {
+          credentials: "include",
+        }
+      );
       const data = await response.json();
 
       if (response.ok) {
         setContributors(data.contributors);
-        setStats(data.stats);
+        console.log(data.contributors)
       } else {
-        console.error('Error fetching contributors:', data.error);
+        console.error("Error fetching contributors:", data.error);
       }
     } catch (error) {
-      console.error('Error fetching contributors:', error);
+      console.error("Error fetching contributors:", error);
     } finally {
       setLoading(false);
     }
+    console.log(stats)
+  };
+  const handleAnalyzeClick = (contributor: Contributor) => {
+    setSelectedContributor(contributor);
   };
 
   if (!isOpen) return null;
@@ -83,14 +96,26 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-white">Contributors</h2>
-                <p className="text-gray-400">{owner}/{repo}</p>
+                <p className="text-gray-400">
+                  {owner}/{repo}
+                </p>
               </div>
               <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-white transition-colors"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -99,19 +124,29 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
             {stats && (
               <div className="grid grid-cols-4 gap-4 mt-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-white">{stats.total_contributors}</div>
+                  <div className="text-2xl font-bold text-white">
+                    {stats.total_contributors}
+                  </div>
                   <div className="text-sm text-gray-400">Contributors</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-white">{stats.total_contributions}</div>
-                  <div className="text-sm text-gray-400">Total Contributions</div>
+                  <div className="text-2xl font-bold text-white">
+                    {stats.total_contributions}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    Total Contributions
+                  </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-white">{stats.average_contributions}</div>
+                  <div className="text-2xl font-bold text-white">
+                    {stats.average_contributions}
+                  </div>
                   <div className="text-sm text-gray-400">Avg Contributions</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-white">{stats.top_contributor?.contributions || 0}</div>
+                  <div className="text-2xl font-bold text-white">
+                    {stats.top_contributor?.contributions || 0}
+                  </div>
                   <div className="text-sm text-gray-400">Top Contributor</div>
                 </div>
               </div>
@@ -142,11 +177,17 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
                       />
                       <div>
                         <div className="flex items-center space-x-2">
-                          <h3 className="font-semibold text-white">{contributor.name || contributor.login}</h3>
-                          <span className="text-sm text-gray-400">@{contributor.login}</span>
+                          <h3 className="font-semibold text-white">
+                            {contributor.name || contributor.login}
+                          </h3>
+                          <span className="text-sm text-gray-400">
+                            @{contributor.login}
+                          </span>
                         </div>
                         {contributor.bio && (
-                          <p className="text-sm text-gray-400 mt-1 max-w-md truncate">{contributor.bio}</p>
+                          <p className="text-sm text-gray-400 mt-1 max-w-md truncate">
+                            {contributor.bio}
+                          </p>
                         )}
                         <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
                           {contributor.company && (
@@ -160,22 +201,32 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
                     </div>
 
                     <div className="text-right">
-                      <div className="text-xl font-bold text-white">{contributor.contributions}</div>
+                      <div className="text-xl font-bold text-white">
+                        {contributor.contributions}
+                      </div>
                       <div className="text-sm text-gray-400">contributions</div>
                       <div className="flex space-x-4 mt-2 text-sm text-gray-500">
                         <span>{contributor.followers} followers</span>
                         <span>{contributor.following} following</span>
                       </div>
                     </div>
+                    <div className="flex flex-col gap-2 w-32 ml-4">
+                      <a
+                        href={contributor.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm text-center"
+                      >
+                        View Profile
+                      </a>
 
-                    <a
-                      href={contributor.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-4 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
-                    >
-                      View Profile
-                    </a>
+                      <button
+                        onClick={() => handleAnalyzeClick(contributor)}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm text-center"
+                      >
+                        Analyze
+                      </button>
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -183,6 +234,16 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
           </div>
         </motion.div>
       </motion.div>
+      {selectedContributor && (
+        <AnalysisModal
+          key="analysisModal"
+          isOpen={!!selectedContributor}
+          onClose={() => setSelectedContributor(null)}
+          owner={owner}
+          repo={repo}
+          contributor={selectedContributor}
+        />
+      )}
     </AnimatePresence>
   );
 };
