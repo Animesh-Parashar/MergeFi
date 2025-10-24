@@ -2,9 +2,12 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ContributorRewardNFT is ERC721 {
+contract ContributorRewardNFT is ERC721, Ownable {
     uint256 private _tokenIdCounter;
+    IERC20 public usdcToken;
 
     struct ContributorReward {
         uint256 amount; // Amount paid to contributor (in wei/smallest unit)
@@ -28,12 +31,32 @@ contract ContributorRewardNFT is ERC721 {
         string contributorName
     );
 
-    constructor() ERC721("MergeFi Contributor Rewards", "MFCR") {}
+    event USDCTransferred(
+        address indexed from,
+        address indexed to,
+        uint256 amount
+    );
+
+    constructor(
+        address _usdcAddress
+    ) ERC721("MergeFi Contributor Rewards", "MFCR") Ownable(msg.sender) {
+        require(_usdcAddress != address(0), "Invalid USDC address");
+        usdcToken = IERC20(_usdcAddress);
+    }
 
     /**
-     * @dev Mint NFT for contributor reward
+     * @dev Update USDC token address (in case of chain deployment)
+     * @param _usdcAddress New USDC token address
+     */
+    function setUSDCAddress(address _usdcAddress) external onlyOwner {
+        require(_usdcAddress != address(0), "Invalid USDC address");
+        usdcToken = IERC20(_usdcAddress);
+    }
+
+    /**
+     * @dev Mint NFT for contributor reward and transfer USDC
      * @param contributor Address of the contributor receiving the reward
-     * @param amount Amount paid to contributor
+     * @param amount Amount paid to contributor (in USDC smallest unit, typically 6 decimals)
      * @param repoName Name of the repository
      * @param contributorName Name/username of the contributor
      */
@@ -50,6 +73,16 @@ contract ContributorRewardNFT is ERC721 {
             bytes(contributorName).length > 0,
             "Contributor name cannot be empty"
         );
+
+        // Transfer USDC from caller (maintainer) to contributor
+        bool transferSuccess = usdcToken.transferFrom(
+            msg.sender,
+            contributor,
+            amount
+        );
+        require(transferSuccess, "USDC transfer to contributor failed");
+
+        emit USDCTransferred(msg.sender, contributor, amount);
 
         uint256 tokenId = _tokenIdCounter;
         _tokenIdCounter++;
@@ -95,7 +128,10 @@ contract ContributorRewardNFT is ERC721 {
         uint256 tokenId
     ) external view returns (ContributorReward memory) {
         // Check existence via stored reward timestamp (set at mint); avoids calling ERC721 internals
-        require(contributorRewards[tokenId].timestamp != 0, "Token does not exist");
+        require(
+            contributorRewards[tokenId].timestamp != 0,
+            "Token does not exist"
+        );
         return contributorRewards[tokenId];
     }
 
@@ -107,7 +143,7 @@ contract ContributorRewardNFT is ERC721 {
     }
 
     /**
-     * @dev Batch mint multiple NFTs for multiple contributors
+     * @dev Batch mint multiple NFTs for multiple contributors with USDC transfers
      */
     function batchMintRewardNFTs(
         address[] memory contributors,
@@ -136,5 +172,26 @@ contract ContributorRewardNFT is ERC721 {
         }
 
         return tokenIds;
+    }
+
+    /**
+     * @dev Get USDC balance of this contract
+     */
+    function getContractUSDCBalance() external view returns (uint256) {
+        return usdcToken.balanceOf(address(this));
+    }
+
+    /**
+     * @dev Emergency withdraw USDC from contract (only owner)
+     */
+    function emergencyWithdrawUSDC(uint256 amount) external onlyOwner {
+        require(amount > 0, "Amount must be greater than 0");
+        require(
+            usdcToken.balanceOf(address(this)) >= amount,
+            "Insufficient contract balance"
+        );
+
+        bool success = usdcToken.transfer(owner(), amount);
+        require(success, "USDC withdrawal failed");
     }
 }
