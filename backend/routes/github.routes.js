@@ -7,7 +7,8 @@ import {
 import {
   maintainercontrol,
   getMaintainerStats,
-  getRepoContributors
+  getRepoContributors,
+  getRepoContributorsWithWallets
 } from '../controllers/maintainer.controller.js';
 import {
   listRepository,
@@ -28,6 +29,7 @@ router.get('/contributor', contributorcontrol);
 router.get('/maintainer/stats', getMaintainerStats);
 router.get('/maintainer', maintainercontrol);
 router.get('/maintainer/:owner/:repo/contributors', getRepoContributors);
+router.get('/maintainer/:owner/:repo/contributors-wallets', getRepoContributorsWithWallets);
 
 // Repository listing routes
 router.post('/repos/list', listRepository);
