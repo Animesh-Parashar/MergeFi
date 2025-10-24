@@ -128,7 +128,7 @@ app.post("/api/auth/logout", (req, res) => {
 import githubroute from './routes/github.routes.js'
 import transactionRoutes from './routes/transaction.routes.js'
 
-app.use("/api/", githubroute);
+app.use("/api", githubroute);
 app.use("/api/transactions", transactionRoutes);
 
 app.listen(process.env.PORT, () =>

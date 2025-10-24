@@ -1,13 +1,13 @@
 import express from 'express';
-import { 
-  contributorcontrol, 
-  getContributorStats, 
-  getContributorEarnings 
+import {
+  contributorcontrol,
+  getContributorStats,
+  getContributorEarnings
 } from '../controllers/contributor.controller.js';
-import { 
-  maintainercontrol, 
-  getMaintainerStats, 
-  getRepoContributors 
+import {
+  maintainercontrol,
+  getMaintainerStats,
+  getRepoContributors
 } from '../controllers/maintainer.controller.js';
 import {
   listRepository,
@@ -15,6 +15,7 @@ import {
   getListedRepositories,
   getUserListedRepositories,
 } from '../controllers/owner.controller.js';
+import { setUsernameAndChain } from '../controllers/setusername_and_chain.controller.js';
 
 const router = express.Router();
 
@@ -33,5 +34,7 @@ router.post('/repos/list', listRepository);
 router.post('/repos/unlist', unlistRepository);
 router.get('/repos/listed', getUserListedRepositories);
 router.get('/repos/all-listed', getListedRepositories);
+
+router.post('/set-user-data', setUsernameAndChain);
 
 export default router;
