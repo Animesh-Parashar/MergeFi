@@ -23,11 +23,11 @@ interface ContributorsModalProps {
   repo: string;
 }
 
-const ContributorsModal: React.FC<ContributorsModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  owner, 
-  repo 
+const ContributorsModal: React.FC<ContributorsModalProps> = ({
+  isOpen,
+  onClose,
+  owner,
+  repo
 }) => {
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,11 +42,11 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
   const fetchContributors = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/repos/${owner}/${repo}/contributors`, {
+      const response = await fetch(`http://localhost:5000/api/maintainer/${owner}/${repo}/contributors`, {
         credentials: 'include'
       });
       const data = await response.json();
-      
+
       if (response.ok) {
         setContributors(data.contributors);
         setStats(data.stats);

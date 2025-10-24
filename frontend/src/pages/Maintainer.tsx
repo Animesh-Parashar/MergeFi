@@ -4,15 +4,11 @@ import axios from 'axios';
 import {
   CheckCircle,
   XCircle,
-  DollarSign,
   GitBranch,
-  Clock,
   Users,
   Star,
   GitPullRequest,
   ExternalLink,
-  ChevronLeft,
-  ChevronRight,
   GitFork,
   Loader2,
 } from 'lucide-react';
@@ -120,7 +116,7 @@ export function Maintainer() {
       });
 
       const { user, repositories, stats } = response.data;
-      
+
       // Fetch which repos are listed from Supabase
       const listedReposResponse = await axios.get('http://localhost:5000/api/repos/listed', {
         withCredentials: true,
@@ -226,9 +222,9 @@ export function Maintainer() {
       setError(null);
       setLoadingRepoId(repo.id);
       const [owner, repoName] = repo.full_name.split('/');
-      
+
       const response = await axios.get(
-        `http://localhost:5000/api/repos/${owner}/${repoName}/contributors`,
+        `http://localhost:5000/api/maintainer/${owner}/${repoName}/contributors`,
         { withCredentials: true }
       );
 
@@ -730,11 +726,10 @@ export function Maintainer() {
                         <button
                           key={page}
                           onClick={() => goToPage(page)}
-                          className={`w-10 h-10 border ${
-                            currentPage === page
-                              ? 'border-white bg-white text-black'
-                              : 'border-gray-700 text-gray-400 hover:border-gray-500'
-                          } transition-colors`}
+                          className={`w-10 h-10 border ${currentPage === page
+                            ? 'border-white bg-white text-black'
+                            : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                            } transition-colors`}
                         >
                           {page}
                         </button>
@@ -848,7 +843,7 @@ export function Maintainer() {
               {error}
             </div>
           )}
-          
+
           <div>
             <h3 className="text-lg font-semibold text-white mb-4">Contributors</h3>
             <div className="space-y-3">
@@ -927,12 +922,12 @@ export function Maintainer() {
             >
               Cancel
             </Button>
+
+
           </div>
         </div>
       </Modal>
 
-      
-     
     </div>
   );
 }
