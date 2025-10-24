@@ -4,22 +4,20 @@ import axios from 'axios';
 import {
   CheckCircle,
   XCircle,
-  DollarSign,
   GitBranch,
-  Clock,
-  TrendingUp,
-  ChevronLeft,
-  ChevronRight,
   Users,
   Star,
   GitPullRequest,
   ExternalLink,
+  GitFork,
+  Loader2,
 } from 'lucide-react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { Modal } from '../components/Modal';
 import ContributorsModal from '../components/ContributorsModal';
-import { CrossChainPayment } from '../components/CrossChainPayment';
+import PayoutModal from '../components/PayoutModal';
+
+
 
 interface Repository {
   id: number;
@@ -40,6 +38,24 @@ interface Repository {
   };
   isOpenToContributions?: boolean;
   poolAmount?: number;
+}
+
+interface Contributor {
+  id: number;
+  login: string;
+  name: string;
+  avatar_url: string;
+  contributions: number;
+  weight?: number;
+  walletAddress?: string;
+  chainId?: number;
+}
+
+interface NFTContributor {
+  address: string;
+  amount: number;
+  name: string;
+  chainId?: number;
 }
 
 interface User {
@@ -70,25 +86,25 @@ interface MaintainerData {
 }
 
 export function Maintainer() {
-  const [showRewardModal, setShowRewardModal] = useState(false);
-  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [backendStats, setBackendStats] = useState<MaintainerStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
-  const [fundAmount, setFundAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [contributorsModal, setContributorsModal] = useState({
     isOpen: false,
     owner: '',
     repo: ''
   });
-  const [showCrossChainModal, setShowCrossChainModal] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const reposPerPage = 3;
+  const [payoutContributors, setPayoutContributors] = useState<Contributor[]>([]);
+  const [payoutFundAmount, setPayoutFundAmount] = useState('');
+  const [loadingRepoId, setLoadingRepoId] = useState<number | null>(null);
+  const [totalForkedRepos, setTotalForkedRepos] = useState(0);
+  const [listingRepoId, setListingRepoId] = useState<number | null>(null);
+  const reposPerPage = 6;
 
   useEffect(() => {
     fetchMaintainerData();
@@ -104,149 +120,316 @@ export function Maintainer() {
       });
 
       const { user, repositories, stats } = response.data;
-      console.log(response);
 
-      // Add default status for repositories (in a real app, this would come from your database)
+      // Fetch which repos are listed from Supabase
+      const listedReposResponse = await axios.get('http://localhost:5000/api/repos/listed', {
+        withCredentials: true,
+      });
+
+      const listedRepoIds = new Set(listedReposResponse.data.repos.map((r: any) => r.github_repo_id));
+
+      // Add status for repositories
       const reposWithStatus = repositories.map((repo: Repository) => ({
         ...repo,
-        isOpenToContributions: false, // Default to closed
-        poolAmount: 0, // Default pool amount
+        isOpenToContributions: listedRepoIds.has(repo.id),
+        poolAmount: 0,
       }));
 
       setUser(user);
       setRepositories(reposWithStatus);
       setBackendStats(stats);
+      setTotalForkedRepos(stats.total_forks || 0);
 
     } catch (error) {
       console.error('Error fetching maintainer data:', error);
       setError('Failed to fetch repository data');
-
-      // Fallback data for development/demo
-      setRepositories([
-        {
-          id: 1,
-          name: 'awesome-blockchain',
-          full_name: 'user/awesome-blockchain',
-          description: 'A comprehensive blockchain development toolkit',
-          html_url: 'https://github.com/user/awesome-blockchain',
-          stargazers_count: 1250,
-          forks_count: 340,
-          language: 'TypeScript',
-          private: false,
-          created_at: '2023-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-          stats: { contributors_count: 15, open_issues_count: 8, open_prs_count: 3 },
-          isOpenToContributions: true,
-          poolAmount: 5000,
-        },
-        {
-          id: 2,
-          name: 'defi-toolkit',
-          full_name: 'user/defi-toolkit',
-          description: 'DeFi development utilities and smart contracts',
-          html_url: 'https://github.com/user/defi-toolkit',
-          stargazers_count: 890,
-          forks_count: 210,
-          language: 'Solidity',
-          private: false,
-          created_at: '2023-02-01T00:00:00Z',
-          updated_at: '2024-02-01T00:00:00Z',
-          stats: { contributors_count: 8, open_issues_count: 12, open_prs_count: 5 },
-          isOpenToContributions: true,
-          poolAmount: 3200,
-        },
-        {
-          id: 3,
-          name: 'web3-starter',
-          full_name: 'user/web3-starter',
-          description: 'Starter template for Web3 applications',
-          html_url: 'https://github.com/user/web3-starter',
-          stargazers_count: 560,
-          forks_count: 120,
-          language: 'JavaScript',
-          private: false,
-          created_at: '2023-03-01T00:00:00Z',
-          updated_at: '2024-03-01T00:00:00Z',
-          stats: { contributors_count: 5, open_issues_count: 4, open_prs_count: 2 },
-          isOpenToContributions: false,
-          poolAmount: 0,
-        },
-      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleContributionStatus = async (repoId: number) => {
-    // In a real app, this would make an API call to update the database
-    setRepositories(prev =>
-      prev.map(repo =>
-        repo.id === repoId
-          ? { ...repo, isOpenToContributions: !repo.isOpenToContributions }
-          : repo
-      )
-    );
-
-    // TODO: Make API call to update repository status
-    // try {
-    //   await axios.patch(`http://localhost:5000/api/repository/${repoId}/contribution-status`, {
-    //     isOpenToContributions: !repositories.find(r => r.id === repoId)?.isOpenToContributions
-    //   }, { withCredentials: true });
-    // } catch (error) {
-    //   console.error('Error updating contribution status:', error);
-    // }
-  };
-
-  const handleAddFunds = (repo: Repository) => {
-    setSelectedRepo(repo);
-    setFundAmount('');
-    setShowRewardModal(true);
-  };
-
-  const submitFunds = async () => {
-    if (!selectedRepo || !fundAmount || parseFloat(fundAmount) <= 0) return;
-
+  const handleListRepo = async (repo: Repository) => {
     try {
-      // TODO: Make API call to add funds to repository pool
-      // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/add-funds`, {
-      //   amount: parseFloat(fundAmount)
-      // }, { withCredentials: true });
+      setListingRepoId(repo.id);
+      setError(null);
+
+      const [owner, repoName] = repo.full_name.split('/');
+
+      // Call backend to list the repository
+      await axios.post(
+        'http://localhost:5000/api/repos/list',
+        {
+          github_repo_id: repo.id,
+          owner: owner,
+          repo: repoName,
+          name: repo.name,
+          full_name: repo.full_name,
+          description: repo.description,
+          html_url: repo.html_url,
+          language: repo.language,
+          stargazers_count: repo.stargazers_count,
+          forks_count: repo.forks_count,
+        },
+        { withCredentials: true }
+      );
 
       // Update local state
       setRepositories(prev =>
+        prev.map(r =>
+          r.id === repo.id
+            ? { ...r, isOpenToContributions: true }
+            : r
+        )
+      );
+
+      alert(`${repo.name} is now open for contributions!`);
+    } catch (error: any) {
+      console.error('Error listing repository:', error);
+      setError(error.response?.data?.error || 'Failed to list repository');
+    } finally {
+      setListingRepoId(null);
+    }
+  };
+
+  const handleUnlistRepo = async (repo: Repository) => {
+    try {
+      setListingRepoId(repo.id);
+      setError(null);
+
+      await axios.post(
+        'http://localhost:5000/api/repos/unlist',
+        { github_repo_id: repo.id },
+        { withCredentials: true }
+      );
+
+      // Update local state
+      setRepositories(prev =>
+        prev.map(r =>
+          r.id === repo.id
+            ? { ...r, isOpenToContributions: false }
+            : r
+        )
+      );
+
+      alert(`${repo.name} is no longer open for contributions.`);
+    } catch (error: any) {
+      console.error('Error unlisting repository:', error);
+      setError(error.response?.data?.error || 'Failed to unlist repository');
+    } finally {
+      setListingRepoId(null);
+    }
+  };
+
+  const handlePayout = async (repo: Repository) => {
+    // Fetch contributors for this repository from the API with wallet data
+    try {
+      setError(null);
+      setLoadingRepoId(repo.id);
+      const [owner, repoName] = repo.full_name.split('/');
+
+      const response = await axios.get(
+        `http://localhost:5000/api/maintainer/${owner}/${repoName}/contributors-wallets`,
+        { withCredentials: true }
+      );
+
+      // Map API response to our Contributor interface
+      const contributors: Contributor[] = response.data.contributors.map((contributor: any) => ({
+        id: contributor.id,
+        login: contributor.login,
+        name: contributor.name || contributor.login,
+        avatar_url: contributor.avatar_url,
+        contributions: contributor.contributions,
+        weight: 5, // Default weight of 5 (middle value between 1-10)
+        walletAddress: contributor.walletAddress,
+        chainId: contributor.chainId ? parseInt(contributor.chainId) : undefined
+      }));
+
+      if (contributors.length === 0) {
+        setError('No contributors found for this repository');
+        return;
+      }
+
+      setPayoutContributors(contributors);
+      setSelectedRepo(repo);
+      setPayoutFundAmount('');
+      setShowPayoutModal(true);
+    } catch (error: any) {
+      console.error('Error fetching contributors:', error);
+      if (error.response?.status === 401) {
+        setError('Authentication required. Please log in again.');
+      } else if (error.response?.status === 404) {
+        setError('Repository not found or you don\'t have access to it.');
+      } else {
+        setError('Failed to fetch contributors. Please try again.');
+      }
+    } finally {
+      setLoadingRepoId(null);
+    }
+  };
+
+  const handleWeightChange = (contributorId: number, weight: number) => {
+    setPayoutContributors(prev =>
+      prev.map(contributor =>
+        contributor.id === contributorId
+          ? { ...contributor, weight }
+          : contributor
+      )
+    );
+  };
+
+  const handleConfirmPayout = async () => {
+    if (!selectedRepo || !payoutFundAmount || parseFloat(payoutFundAmount) <= 0) {
+      setError('Please enter a valid fund amount');
+      return;
+    }
+
+    if (payoutContributors.some(c => !c.weight || c.weight < 1 || c.weight > 10)) {
+      setError('Please set weights between 1-10 for all contributors');
+      return;
+    }
+
+    // Check if contributors have wallet addresses
+    const contributorsWithoutWallets = payoutContributors.filter(c => !c.walletAddress);
+    if (contributorsWithoutWallets.length > 0) {
+      setError(`Some contributors don't have wallet addresses registered: ${contributorsWithoutWallets.map(c => c.login).join(', ')}`);
+      return;
+    }
+
+    try {
+      // Calculate weighted contributions (contributions × weight) for each contributor
+      const fundAmountNum = parseFloat(payoutFundAmount);
+
+      // Calculate total weighted contributions: Σ(contributions × weight)
+      const totalWeightedContributions = payoutContributors.reduce((sum, c) =>
+        sum + (c.contributions * (c.weight || 0)), 0
+      );
+
+      if (totalWeightedContributions === 0) {
+        setError('Total weighted contributions cannot be zero');
+        return;
+      }
+
+      // Calculate individual payouts using: (contributions × weight) / Σ(contributions × weight) × totalPool
+      const nftContributors: NFTContributor[] = payoutContributors.map(contributor => {
+        const weightedContribution = contributor.contributions * (contributor.weight || 0);
+        const amount = (weightedContribution / totalWeightedContributions) * fundAmountNum;
+        // Round to 2 decimal places
+        const roundedAmount = Math.round(amount * 100) / 100;
+
+        return {
+          address: contributor.walletAddress || '0x0000000000000000000000000000000000000000',
+          amount: roundedAmount,
+          name: contributor.name || contributor.login,
+          chainId: contributor.chainId
+        };
+      });
+
+      console.log('Processing payout with NFT minting:', {
+        repo: selectedRepo.name,
+        totalAmount: fundAmountNum.toFixed(2),
+        totalWeightedContributions,
+        contributors: nftContributors.map(c => ({
+          name: c.name,
+          amount: c.amount.toFixed(2),
+          percentage: ((c.amount / fundAmountNum) * 100).toFixed(2) + '%'
+        }))
+      });
+
+      // Call cross-chain NFT minting service
+      console.log('Starting NFT minting for contributors...');
+      
+      // Import NFT services
+      const { callMintCrossChainRewardNFT } = await import('../services/runtransaction');
+      
+      // Get current MetaMask connected chain as source chain
+      let sourceChainId = 11155111; // Default to Sepolia
+      
+      if (window.ethereum) {
+        try {
+          const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+          sourceChainId = parseInt(chainId, 16);
+          console.log('Connected MetaMask chain ID:', sourceChainId);
+        } catch (error) {
+          console.error('Error getting MetaMask chain ID:', error);
+        }
+      }
+      
+      // API function to get user's chainId preference
+      const getUserChainId = async (githubUsername: string): Promise<number | null> => {
+        try {
+          const response = await axios.post('http://localhost:5000/api/getchain', { 
+            github_username: githubUsername 
+          }, { withCredentials: true });
+          
+          // API returns chainId directly as number
+          const chainId = response.data?.chainId || response.data?.chain;
+          return chainId ? parseInt(chainId) : null;
+        } catch (error) {
+          console.error(`Error getting chain for user ${githubUsername}:`, error);
+          return null;
+        }
+      };
+      
+      // Process each contributor individually
+      for (const contributor of nftContributors) {
+        try {
+          console.log(`Processing NFT mint for ${contributor.name} (${contributor.address})`);
+          
+          // Get user's preferred chainId from API
+          const userChainId = await getUserChainId(contributor.name);
+          console.log(`User ${contributor.name} preferred chainId:`, userChainId);
+          
+          // Use the user's preferred chainId as target, fallback to source chain if not found
+          const targetChainId = userChainId || sourceChainId;
+          
+          console.log(`Minting NFT from chain ${sourceChainId} to chain ${targetChainId} for ${contributor.name}`);
+          
+          // Call NFT minting function with proper parameters
+          const result = await callMintCrossChainRewardNFT(
+            contributor.amount.toString(),  // amount
+            contributor.address,            // walletAddress  
+            targetChainId,                 // toChainId (user's preferred chain)
+            [sourceChainId],               // sourceChains (MetaMask connected chain)
+            selectedRepo.name,             // reponame
+            contributor.name               // contributorname
+          );
+          
+          console.log(`✅ NFT minted successfully for ${contributor.name}:`, result);
+          
+        } catch (error) {
+          console.error(`❌ Failed to mint NFT for ${contributor.name}:`, error);
+          // Continue with other contributors even if one fails
+        }
+      }
+      
+      console.log('🎉 NFT minting process completed for all contributors.');
+     
+
+      // TODO: Make API call to record payout in database
+      // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/payout`, {
+      //   contributors: nftContributors,
+      //   totalAmount: fundAmountNum
+      // }, { withCredentials: true });
+
+      // Update repository pool amount
+      setRepositories(prev =>
         prev.map(repo =>
           repo.id === selectedRepo.id
-            ? { ...repo, poolAmount: (repo.poolAmount || 0) + parseFloat(fundAmount) }
+            ? { ...repo, poolAmount: Math.max(0, (repo.poolAmount || 0) - fundAmountNum) }
             : repo
         )
       );
 
-      setShowRewardModal(false);
-      setFundAmount('');
+      alert('Payout and NFT minting completed successfully!');
+      setShowPayoutModal(false);
+      setPayoutContributors([]);
+      setPayoutFundAmount('');
       setSelectedRepo(null);
-    } catch (error) {
-      console.error('Error adding funds:', error);
+      setError(null);
+    } catch (error: any) {
+      console.error('Error processing payout:', error);
+      setError(error.message || 'Failed to process payout');
     }
-  };
-
-  const handleCrossChainPayment = (transaction: any) => {
-    if (isProcessingPayment) return; // Prevent multiple clicks
-
-    setSelectedTransaction(transaction);
-    setShowCrossChainModal(true);
-    setIsProcessingPayment(true);
-  };
-
-  const handlePaymentComplete = (result: any) => {
-    console.log('Payment completed:', result);
-    setIsProcessingPayment(false);
-    // You might want to call an API to update the transaction status
-  };
-
-  const handleCrossChainModalClose = () => {
-    setShowCrossChainModal(false);
-    setIsProcessingPayment(false);
-    setSelectedTransaction(null);
   };
 
   // Pagination calculations
@@ -255,49 +438,18 @@ export function Maintainer() {
   const endIndex = startIndex + reposPerPage;
   const currentRepos = repositories.slice(startIndex, endIndex);
 
+  // Split current repos into rows of 2
+  const repoRows: Repository[][] = [];
+  for (let i = 0; i < currentRepos.length; i += 2) {
+    repoRows.push(currentRepos.slice(i, i + 2));
+  }
+
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
   // Calculate frontend stats
   const openRepos = repositories.filter(repo => repo.isOpenToContributions).length;
-  const totalPoolValue = repositories.reduce((sum, repo) => sum + (repo.poolAmount || 0), 0);
-
-  // Mock pending transactions (in a real app, this would come from the backend)
-  const pendingTransactions = [
-    {
-      id: 1,
-      contributor: '0x484826732d75d6A8018bFAD3468Bd84f64614268',
-      pr: '#234',
-      repo: repositories[0]?.name || 'awesome-blockchain',
-      amount: 250,
-      aiSuggestion: 275,
-    },
-    {
-      id: 2,
-      contributor: 'bob.dev',
-      pr: '#189',
-      repo: repositories[1]?.name || 'defi-toolkit',
-      amount: 180,
-      aiSuggestion: 180,
-    },
-    {
-      id: 3,
-      contributor: 'charlie.code',
-      pr: '#156',
-      repo: repositories[0]?.name || 'awesome-blockchain',
-      amount: 320,
-      aiSuggestion: 350,
-    },
-  ];
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
 
   return (
     <div className="min-h-screen bg-black text-white font-mono p-6 lg:p-12">
@@ -339,24 +491,22 @@ export function Maintainer() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-400 text-sm mb-2">Total Pool Value</div>
-                <div className="text-3xl font-bold">${totalPoolValue.toLocaleString()}</div>
-                <div className="text-green-400 text-sm mt-1">PyUSD</div>
+                <div className="text-gray-400 text-sm mb-2">Total Repositories</div>
+                <div className="text-3xl font-bold">{repositories.length}</div>
+                <div className="text-gray-500 text-sm mt-1">Owned repos</div>
               </div>
-              <DollarSign className="w-12 h-12 text-gray-700" />
+              <GitBranch className="w-12 h-12 text-gray-700" />
             </div>
           </Card>
 
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-400 text-sm mb-2">Open Repositories</div>
-                <div className="text-3xl font-bold">{openRepos}</div>
-                <div className="text-gray-500 text-sm mt-1">
-                  {repositories.length - openRepos} closed
-                </div>
+                <div className="text-gray-400 text-sm mb-2">Forked Repos</div>
+                <div className="text-3xl font-bold">{totalForkedRepos}</div>
+                <div className="text-gray-500 text-sm mt-1">Contributing to</div>
               </div>
-              <Users className="w-12 h-12 text-gray-700" />
+              <GitFork className="w-12 h-12 text-gray-700" />
             </div>
           </Card>
 
@@ -365,7 +515,7 @@ export function Maintainer() {
               <div>
                 <div className="text-gray-400 text-sm mb-2">Total Stars</div>
                 <div className="text-3xl font-bold">
-                  {backendStats?.total_stars.toLocaleString() || repositories.reduce((sum, repo) => sum + repo.stargazers_count, 0).toLocaleString()}
+                  {backendStats?.total_stars.toLocaleString() || 0}
                 </div>
                 <div className="text-yellow-400 text-sm mt-1">GitHub Stars</div>
               </div>
@@ -376,16 +526,16 @@ export function Maintainer() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-400 text-sm mb-2">Pending Approvals</div>
-                <div className="text-3xl font-bold">{pendingTransactions.length}</div>
-                <div className="text-yellow-400 text-sm mt-1">Needs review</div>
+                <div className="text-gray-400 text-sm mb-2">Open Repos</div>
+                <div className="text-3xl font-bold">{openRepos}</div>
+                <div className="text-gray-500 text-sm mt-1">For contributions</div>
               </div>
-              <Clock className="w-12 h-12 text-gray-700" />
+              <CheckCircle className="w-12 h-12 text-gray-700" />
             </div>
           </Card>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6 mb-12">
+        <div>
           {/* Repository Status */}
           <div>
             <div className="flex items-center justify-between mb-6">
@@ -398,344 +548,226 @@ export function Maintainer() {
             {loading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
-                  <Card key={i}>
-                    <div className="animate-pulse">
-                      <div className="h-4 bg-gray-700 rounded mb-4"></div>
-                      <div className="h-3 bg-gray-800 rounded mb-2"></div>
-                      <div className="h-3 bg-gray-800 rounded w-2/3"></div>
-                    </div>
-                  </Card>
+                  <div key={i} className="grid lg:grid-cols-2 gap-6">
+                    <Card>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-gray-700 rounded mb-4"></div>
+                        <div className="h-3 bg-gray-800 rounded mb-2"></div>
+                        <div className="h-3 bg-gray-800 rounded w-2/3"></div>
+                      </div>
+                    </Card>
+                    <Card>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-gray-700 rounded mb-4"></div>
+                        <div className="h-3 bg-gray-800 rounded mb-2"></div>
+                        <div className="h-3 bg-gray-800 rounded w-2/3"></div>
+                      </div>
+                    </Card>
+                  </div>
                 ))}
               </div>
+            ) : error ? (
+              <Card>
+                <div className="text-center py-8">
+                  <p className="text-red-400 mb-4">{error}</p>
+                  <Button onClick={fetchMaintainerData} variant="outline">
+                    Retry
+                  </Button>
+                </div>
+              </Card>
+            ) : repositories.length === 0 ? (
+              <Card>
+                <p className="text-gray-400 text-center py-8">No repositories found</p>
+              </Card>
             ) : (
               <>
-                <div className="space-y-4 mb-6">
-                  {currentRepos.map((repo, index) => (
-                    <motion.div
-                      key={repo.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <Card hover>
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <GitBranch className="w-5 h-5 text-gray-400" />
-                                <span className="font-bold">{repo.name}</span>
-                                {repo.private && (
-                                  <span className="text-xs bg-gray-700 px-2 py-1 rounded">Private</span>
-                                )}
-                                <a
-                                  href={repo.html_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-gray-400 hover:text-white"
-                                >
-                                  <ExternalLink className="w-4 h-4" />
-                                </a>
-                              </div>
+                <div className="space-y-6 mb-6">
+                  {repoRows.map((row, rowIndex) => (
+                    <div key={rowIndex} className="grid grid-cols-2 gap-6">
+                      {row.map((repo, colIndex) => {
+                        const index = rowIndex * 2 + colIndex;
+                        return (
+                          <motion.div
+                            key={repo.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                          >
+                            <Card hover className="h-full">
+                              <div className="space-y-4">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                      <GitBranch className="w-5 h-5 text-gray-400" />
+                                      <span className="font-bold">{repo.name}</span>
+                                      {repo.private && (
+                                        <span className="text-xs bg-gray-700 px-2 py-1 rounded">
+                                          Private
+                                        </span>
+                                      )}
+                                      <a
+                                        href={repo.html_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-gray-400 hover:text-white"
+                                      >
+                                        <ExternalLink className="w-4 h-4" />
+                                      </a>
+                                    </div>
 
-                              <div className="flex items-center gap-4 text-sm text-gray-400 mb-2">
-                                <div className="flex items-center gap-1">
-                                  <Star className="w-4 h-4" />
-                                  <span>{repo.stargazers_count}</span>
+                                    <div className="flex items-center gap-4 text-sm text-gray-400 mb-2">
+                                      <div className="flex items-center gap-1">
+                                        <Star className="w-4 h-4" />
+                                        <span>{repo.stargazers_count}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <GitPullRequest className="w-4 h-4" />
+                                        <span>{repo.stats.open_prs_count} PRs</span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Users className="w-4 h-4" />
+                                        <span>{repo.stats.contributors_count}</span>
+                                      </div>
+                                    </div>
+
+                                    {repo.description && (
+                                      <p className="text-sm text-gray-400 mb-3 line-clamp-2">
+                                        {repo.description}
+                                      </p>
+                                    )}
+
+                                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                                      <span>Language: {repo.language || 'N/A'}</span>
+                                      <span>
+                                        Updated:{' '}
+                                        {new Date(repo.updated_at).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    {repo.isOpenToContributions ? (
+                                      <div className="flex items-center gap-2 text-green-400">
+                                        <CheckCircle className="w-5 h-5" />
+                                        <span className="text-sm">Open</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2 text-gray-500">
+                                        <XCircle className="w-5 h-5" />
+                                        <span className="text-sm">Closed</span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                  <GitPullRequest className="w-4 h-4" />
-                                  <span>{repo.stats.open_prs_count} PRs</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Users className="w-4 h-4" />
-                                  <span>{repo.stats.contributors_count}</span>
+
+                                <div className="flex items-center justify-between pt-3 border-t border-gray-800">
+                                  <div>
+                                    <div className="text-sm text-gray-400">
+                                      Pool: ${repo.poolAmount?.toLocaleString() || 0} USDC
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {repo.stats.open_issues_count} open issues
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        setContributorsModal({
+                                          isOpen: true,
+                                          owner: repo.full_name.split('/')[0],
+                                          repo: repo.full_name.split('/')[1],
+                                        })
+                                      }
+                                    >
+                                      Contributors ({repo.stats.contributors_count})
+                                    </Button>
+                                    {repo.isOpenToContributions ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleUnlistRepo(repo)}
+                                        disabled={listingRepoId === repo.id}
+                                      >
+                                        {listingRepoId === repo.id ? (
+                                          <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                          'Unlist Repo'
+                                        )}
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleListRepo(repo)}
+                                        disabled={listingRepoId === repo.id}
+                                      >
+                                        {listingRepoId === repo.id ? (
+                                          <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                          'List Repo'
+                                        )}
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => handlePayout(repo)}
+                                      disabled={loadingRepoId === repo.id}
+                                    >
+                                      {loadingRepoId === repo.id ? 'Loading...' : 'Payout'}
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
-
-                              {repo.description && (
-                                <p className="text-sm text-gray-400 mb-3 line-clamp-2">
-                                  {repo.description}
-                                </p>
-                              )}
-
-                              <div className="flex items-center gap-4 text-sm text-gray-500">
-                                <span>Language: {repo.language || 'N/A'}</span>
-                                <span>Updated: {formatDate(repo.updated_at)}</span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              {repo.isOpenToContributions ? (
-                                <div className="flex items-center gap-2 text-green-400">
-                                  <CheckCircle className="w-5 h-5" />
-                                  <span className="text-sm">Open</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2 text-gray-500">
-                                  <XCircle className="w-5 h-5" />
-                                  <span className="text-sm">Closed</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-3 border-t border-gray-800">
-                            <div>
-                              <div className="text-sm text-gray-400">
-                                Pool: ${repo.poolAmount?.toLocaleString() || 0} PyUSD
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {repo.stats.open_issues_count} open issues
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setContributorsModal({
-                                  isOpen: true,
-                                  owner: repo.full_name.split('/')[0],
-                                  repo: repo.full_name.split('/')[1]
-                                })}
-                              >
-                                Contributors ({repo.stats.contributors_count})
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={repo.isOpenToContributions ? "secondary" : "outline"}
-                                onClick={() => toggleContributionStatus(repo.id)}
-                              >
-                                {repo.isOpenToContributions ? 'Close' : 'Open to Contributions'}
-                              </Button>
-                              {repo.isOpenToContributions && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleAddFunds(repo)}
-                                >
-                                  Add Funds
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
-                    </motion.div>
+                            </Card>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
                   ))}
                 </div>
 
-                {/* Pagination */}
+                {/* Pagination Controls */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-400">
-                      Showing {startIndex + 1}-{Math.min(endIndex, repositories.length)} of {repositories.length} repositories
-                    </div>
+                  <div className="flex items-center justify-center gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => goToPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
                     <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => goToPage(currentPage - 1)}
-                        disabled={currentPage === 1}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <span className="text-sm text-gray-400 px-3">
-                        {currentPage} of {totalPages}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => goToPage(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => goToPage(page)}
+                          className={`w-10 h-10 border ${currentPage === page
+                            ? 'border-white bg-white text-black'
+                            : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                            } transition-colors`}
+                        >
+                          {page}
+                        </button>
+                      ))}
                     </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
                   </div>
                 )}
               </>
             )}
           </div>
 
-          {/* AI Reward Suggestions */}
-          <div>
-            <h2 className="text-2xl font-bold mb-6">AI Reward Suggestions</h2>
-            <Card className="h-full">
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <TrendingUp className="w-5 h-5 text-gray-400 mt-1" />
-                  <div>
-                    <div className="font-bold mb-2">Contribution Analysis</div>
-                    <div className="text-sm text-gray-400 space-y-2">
-                      <p>• PR #234: High complexity, suggests +$25 from base amount</p>
-                      <p>• PR #156: Critical bug fix, suggests +$30 for impact</p>
-                      <p>• Average reward: $235 PyUSD per merged PR</p>
-                    </div>
-                  </div>
-                </div>
-
-                {backendStats && (
-                  <div className="pt-4 border-t border-gray-800">
-                    <div className="text-sm text-gray-500 mb-2">Repository Overview:</div>
-                    <div className="text-sm text-gray-400 space-y-1">
-                      <div>• Total repositories: {backendStats.total_owned_repos}</div>
-                      <div>• Total contributors: {backendStats.total_contributors}</div>
-                      <div>• Open issues: {backendStats.total_open_issues}</div>
-                      <div>• Open PRs: {backendStats.total_open_prs}</div>
-                      {backendStats.most_popular_repo && (
-                        <div>• Most popular: {backendStats.most_popular_repo.name}</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-4 border-t border-gray-800">
-                  <div className="text-sm text-gray-500">AI recommendations based on:</div>
-                  <div className="text-sm text-gray-400 mt-2 space-y-1">
-                    <div>• Lines of code changed</div>
-                    <div>• Complexity analysis</div>
-                    <div>• Issue priority</div>
-                    <div>• Historical data</div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </div>
-
-        {/* Pending Transactions */}
-        <div>
-          <h2 className="text-2xl font-bold mb-6">Pending Transactions</h2>
-          <div className="space-y-4">
-            {pendingTransactions.map((tx, index) => (
-              <motion.div
-                key={tx.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card>
-                  <div className="grid md:grid-cols-6 gap-4 items-center">
-                    <div>
-                      <div className="text-sm text-gray-400">Contributor</div>
-                      <div className="font-bold">{tx.contributor}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-400">Repository</div>
-                      <div className="text-sm">{tx.repo}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-400">PR</div>
-                      <div className="text-sm">{tx.pr}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-400">Amount</div>
-                      <div className="font-bold">${tx.amount} PyUSD</div>
-                      {tx.aiSuggestion !== tx.amount && (
-                        <div className="text-xs text-yellow-400">
-                          AI suggests: ${tx.aiSuggestion}
-                        </div>
-                      )}
-                    </div>
-                    <div className="md:col-span-2 flex gap-3">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setShowApproveModal(true)}
-                        className="flex-1 min-w-0"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCrossChainPayment(tx)}
-                        disabled={isProcessingPayment}
-                        className="flex-1 min-w-0 whitespace-nowrap"
-                      >
-                        {isProcessingPayment ? 'Processing...' : 'Cross-Chain Pay'}
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
         </div>
       </motion.div>
-
-      {/* Add Funds Modal */}
-      <Modal
-        isOpen={showRewardModal}
-        onClose={() => setShowRewardModal(false)}
-        title="Add Funds to Pool"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Repository</label>
-            <div className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded">
-              {selectedRepo?.name || 'Select Repository'}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Amount (PyUSD)</label>
-            <input
-              type="number"
-              placeholder="1000"
-              value={fundAmount}
-              onChange={(e) => setFundAmount(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded focus:border-gray-500 outline-none"
-            />
-          </div>
-          <div className="text-sm text-gray-400">
-            Current pool: ${selectedRepo?.poolAmount?.toLocaleString() || 0} PyUSD
-          </div>
-          <Button
-            className="w-full"
-            onClick={submitFunds}
-            disabled={!fundAmount || parseFloat(fundAmount) <= 0}
-          >
-            Add ${fundAmount || '0'} to Pool
-          </Button>
-        </div>
-      </Modal>
-
-      {/* Approve Transaction Modal */}
-      <Modal
-        isOpen={showApproveModal}
-        onClose={() => setShowApproveModal(false)}
-        title="Approve Transaction"
-      >
-        <div className="space-y-6">
-          <div className="space-y-4">
-            <div className="flex justify-between py-2 border-b border-gray-800">
-              <span className="text-gray-400">Contributor</span>
-              <span className="font-bold">alice.eth</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-gray-800">
-              <span className="text-gray-400">Pull Request</span>
-              <span className="font-bold">#234</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-gray-800">
-              <span className="text-gray-400">Amount</span>
-              <span className="font-bold">$250 PyUSD</span>
-            </div>
-            <div className="flex justify-between py-2">
-              <span className="text-gray-400">AI Suggestion</span>
-              <span className="font-bold text-yellow-400">$275 PyUSD</span>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <Button className="flex-1" onClick={() => setShowApproveModal(false)}>
-              Approve $250
-            </Button>
-            <Button variant="outline" className="flex-1" onClick={() => setShowApproveModal(false)}>
-              Use AI Amount
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Contributors Modal */}
       <ContributorsModal
@@ -745,14 +777,22 @@ export function Maintainer() {
         repo={contributorsModal.repo}
       />
 
-      {/* Cross-Chain Payment Modal - Updated */}
-      <CrossChainPayment
-        isOpen={showCrossChainModal}
-        onClose={handleCrossChainModalClose}
-        recipient={selectedTransaction?.contributor || ''}
-        suggestedAmount={selectedTransaction?.amount || 0}
-        onPaymentComplete={handlePaymentComplete}
+      {/* Payout Modal */}
+      <PayoutModal
+        isOpen={showPayoutModal}
+        onClose={() => {
+          setShowPayoutModal(false);
+          setError(null);
+        }}
+        selectedRepo={selectedRepo}
+        contributors={payoutContributors}
+        fundAmount={payoutFundAmount}
+        error={error}
+        onFundAmountChange={setPayoutFundAmount}
+        onWeightChange={handleWeightChange}
+        onConfirmPayout={handleConfirmPayout}
       />
+
     </div>
   );
 }

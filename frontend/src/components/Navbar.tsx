@@ -1,14 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, User, Users, Shield, ChevronDown, Wallet, Copy, Check } from 'lucide-react';
+import { Home, User, Users, Shield, ChevronDown, Wallet, Copy, Check, Activity } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
 import { sepolia, arbitrumSepolia } from 'wagmi/chains';
 import { useWalletStore } from '../store/walletStore';
 
-const PYUSD_SEPOLIA = '0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9';
 const USDC_SEPOLIA = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
-const PYUSD_ARBITRUM = '0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1';
 const USDC_ARBITRUM = '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d';
 
 
@@ -42,7 +40,7 @@ export function Navbar() {
     try {
       console.log('Sending user data:', {
         github_username: githubUsername,
-        wallet_address: walletAddress,
+        walletaddress: walletAddress,
         chain: chainId
       });
 
@@ -53,7 +51,7 @@ export function Navbar() {
         },
         body: JSON.stringify({
           github_username: githubUsername,
-          wallet_address: walletAddress,
+          walletaddress: walletAddress,
           chain: chainId
         }),
       });
@@ -111,22 +109,10 @@ export function Navbar() {
   }, [isConnected, address, chainId]);
 
   // Token balances
-  const { data: pyusdSepoliaBalance } = useBalance({
-    address,
-    token: PYUSD_SEPOLIA,
-    chainId: sepolia.id,
-  });
-
   const { data: usdcSepoliaBalance } = useBalance({
     address,
     token: USDC_SEPOLIA,
     chainId: sepolia.id,
-  });
-
-  const { data: pyusdArbitrumBalance } = useBalance({
-    address,
-    token: PYUSD_ARBITRUM,
-    chainId: arbitrumSepolia.id,
   });
 
   const { data: usdcArbitrumBalance } = useBalance({
@@ -139,7 +125,7 @@ export function Navbar() {
     { path: '/', label: 'Home', icon: Home },
     { path: '/maintainer', label: 'Maintainer', icon: User },
     { path: '/contributor', label: 'Contributor', icon: Users },
-    { path: '/owner', label: 'Owner', icon: Shield },
+    { path: '/transactions', label: 'Transactions', icon: Activity },
   ];
 
   const formatAddress = (address: string) => {
@@ -318,12 +304,6 @@ export function Navbar() {
                       </div>
                       <div className="space-y-2 ml-4">
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-300">PyUSD</span>
-                          <span className="text-sm font-mono text-white">
-                            {formatBalance(pyusdSepoliaBalance, 'PyUSD')}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-300">USDC</span>
                           <span className="text-sm font-mono text-white">
                             {formatBalance(usdcSepoliaBalance, 'USDC')}
@@ -339,12 +319,6 @@ export function Navbar() {
                         Arbitrum Sepolia
                       </div>
                       <div className="space-y-2 ml-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-300">PyUSD</span>
-                          <span className="text-sm font-mono text-white">
-                            {formatBalance(pyusdArbitrumBalance, 'PyUSD')}
-                          </span>
-                        </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-300">USDC</span>
                           <span className="text-sm font-mono text-white">

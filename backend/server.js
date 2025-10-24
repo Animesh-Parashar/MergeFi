@@ -126,7 +126,10 @@ app.post("/api/auth/logout", (req, res) => {
 
 //using routes
 import githubroute from './routes/github.routes.js'
-app.use("/api/", githubroute);
+import transactionRoutes from './routes/transaction.routes.js'
+
+app.use("/api", githubroute);
+app.use("/api/transactions", transactionRoutes);
 
 app.listen(process.env.PORT, () =>
   console.log(`Server running on http://localhost:${process.env.PORT}`)

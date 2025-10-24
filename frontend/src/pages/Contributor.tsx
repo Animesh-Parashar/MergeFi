@@ -1,10 +1,16 @@
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import {
   DollarSign,
   Award,
   GitMerge,
-  TrendingUp,
   ExternalLink,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle,
+  Clock,
 } from 'lucide-react';
 import { Card } from '../components/Card';
 import {
@@ -17,71 +23,116 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
+interface PRData {
+  id: number;
+  repo: string;
+  pr: string;
+  title: string;
+  date: string;
+  url: string;
+  state?: string;
+}
+
+interface BadgeData {
+  name: string;
+  contributions: number;
+  level: string;
+  color: string;
+}
+
+interface StatsData {
+  totalPRs: number;
+  totalRepos: number;
+  mergedPRs: PRData[];
+  badges: BadgeData[];
+  user: any;
+}
+
+interface EarningsData {
+  totalEarnings: number;
+  earningsData: { month: string; earnings: number }[];
+}
+
 export function Contributor() {
-  const earningsData = [
-    { month: 'Jan', earnings: 320 },
-    { month: 'Feb', earnings: 580 },
-    { month: 'Mar', earnings: 750 },
-    { month: 'Apr', earnings: 920 },
-    { month: 'May', earnings: 1180 },
-    { month: 'Jun', earnings: 1540 },
-  ];
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [earnings, setEarnings] = useState<EarningsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
-  const mergedPRs = [
-    {
-      id: 1,
-      repo: 'awesome-blockchain',
-      pr: '#234',
-      title: 'Implement multi-sig wallet',
-      reward: 275,
-      date: '2025-06-15',
-    },
-    {
-      id: 2,
-      repo: 'defi-toolkit',
-      pr: '#189',
-      title: 'Add staking mechanism',
-      reward: 180,
-      date: '2025-06-10',
-    },
-    {
-      id: 3,
-      repo: 'awesome-blockchain',
-      pr: '#201',
-      title: 'Fix transaction validation',
-      reward: 220,
-      date: '2025-06-05',
-    },
-    {
-      id: 4,
-      repo: 'web3-starter',
-      pr: '#87',
-      title: 'Update dependencies',
-      reward: 95,
-      date: '2025-05-28',
-    },
-  ];
+  useEffect(() => {
+    fetchContributorData();
+  }, []);
 
-  const badges = [
-    {
-      name: 'awesome-blockchain',
-      contributions: 12,
-      level: 'Gold',
-      color: 'from-yellow-600 to-yellow-400',
-    },
-    {
-      name: 'defi-toolkit',
-      contributions: 7,
-      level: 'Silver',
-      color: 'from-gray-500 to-gray-300',
-    },
-    {
-      name: 'web3-starter',
-      contributions: 3,
-      level: 'Bronze',
-      color: 'from-orange-700 to-orange-500',
-    },
-  ];
+  const fetchContributorData = async () => {
+    try {
+      setLoading(true);
+      
+      const [statsResponse, earningsResponse] = await Promise.all([
+        axios.get('http://localhost:5000/api/contributor/stats', {
+          withCredentials: true,
+        }),
+        axios.get('http://localhost:5000/api/contributor/earnings', {
+          withCredentials: true,
+        }),
+      ]);
+
+      setStats(statsResponse.data);
+      setEarnings(earningsResponse.data);
+      setError(null);
+    } catch (err: any) {
+      console.error('Error fetching contributor data:', err);
+      setError(err.response?.data?.error || 'Failed to fetch data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>Loading contributor data...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">Error: {error}</p>
+          <button
+            onClick={fetchContributorData}
+            className="bg-gray-900 border border-gray-700 px-6 py-2 hover:bg-gray-800"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stats || !earnings) {
+    return null;
+  }
+
+  // Pagination logic
+  const totalPages = Math.ceil(stats.mergedPRs.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentPRs = stats.mergedPRs.slice(startIndex, endIndex);
+
+  const goToNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  };
+
+  const goToPrevPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
 
   return (
     <div className="min-h-screen bg-black text-white font-mono p-6 lg:p-12">
@@ -95,7 +146,7 @@ export function Contributor() {
             Contributor Dashboard
           </h1>
           <p className="text-gray-400 text-lg">
-            Track your contributions, earnings, and achievement badges
+            Welcome back, @{stats.user.login} · Track your contributions, earnings, and achievement badges
           </p>
         </div>
 
@@ -104,7 +155,7 @@ export function Contributor() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-400 text-sm mb-2">Total Earnings</div>
-                <div className="text-3xl font-bold">$1,540</div>
+                <div className="text-3xl font-bold">${earnings.totalEarnings}</div>
                 <div className="text-green-400 text-sm mt-1">PyUSD</div>
               </div>
               <DollarSign className="w-12 h-12 text-gray-700" />
@@ -115,8 +166,8 @@ export function Contributor() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-400 text-sm mb-2">Merged PRs</div>
-                <div className="text-3xl font-bold">22</div>
-                <div className="text-gray-500 text-sm mt-1">Across 3 repos</div>
+                <div className="text-3xl font-bold">{stats.totalPRs}</div>
+                <div className="text-gray-500 text-sm mt-1">Across {stats.totalRepos} repos</div>
               </div>
               <GitMerge className="w-12 h-12 text-gray-700" />
             </div>
@@ -126,8 +177,10 @@ export function Contributor() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-400 text-sm mb-2">NFT Badges</div>
-                <div className="text-3xl font-bold">3</div>
-                <div className="text-gray-500 text-sm mt-1">1 Gold, 1 Silver</div>
+                <div className="text-3xl font-bold">{stats.badges.length}</div>
+                <div className="text-gray-500 text-sm mt-1">
+                  {stats.badges.filter(b => b.level === 'Gold').length} Gold, {stats.badges.filter(b => b.level === 'Silver').length} Silver
+                </div>
               </div>
               <Award className="w-12 h-12 text-gray-700" />
             </div>
@@ -139,7 +192,7 @@ export function Contributor() {
           <Card>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={earningsData}>
+                <LineChart data={earnings.earningsData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                   <XAxis
                     dataKey="month"
@@ -174,74 +227,136 @@ export function Contributor() {
 
         <div className="grid lg:grid-cols-2 gap-6 mb-12">
           <div>
-            <h2 className="text-2xl font-bold mb-6">Recent Contributions</h2>
-            <div className="space-y-4">
-              {mergedPRs.map((pr, index) => (
-                <motion.div
-                  key={pr.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <Card hover>
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-gray-400 text-sm">{pr.repo}</span>
-                          <span className="text-gray-600">•</span>
-                          <span className="text-gray-400 text-sm">{pr.pr}</span>
-                        </div>
-                        <div className="font-bold mb-2">{pr.title}</div>
-                        <div className="text-sm text-gray-500">{pr.date}</div>
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-gray-600" />
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-gray-800">
-                      <div className="text-sm text-gray-400">Reward</div>
-                      <div className="font-bold text-green-400">
-                        ${pr.reward} PyUSD
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              ))}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">Recent Contributions</h2>
+              {stats.mergedPRs.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <span>
+                    {startIndex + 1}-{Math.min(endIndex, stats.mergedPRs.length)} of {stats.mergedPRs.length}
+                  </span>
+                </div>
+              )}
             </div>
+            {stats.mergedPRs.length === 0 ? (
+              <Card>
+                <p className="text-gray-400 text-center py-8">No merged pull requests yet</p>
+              </Card>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {currentPRs.map((pr, index) => (
+                    <motion.div
+                      key={pr.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <Card hover>
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-gray-400 text-sm">{pr.repo}</span>
+                              <span className="text-gray-600">•</span>
+                              <span className="text-gray-400 text-sm">{pr.pr}</span>
+                            </div>
+                            <div className="font-bold mb-2">{pr.title}</div>
+                            <div className="text-sm text-gray-500">{pr.date}</div>
+                          </div>
+                          <a
+                            href={pr.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-400 hover:text-white"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-800">
+                          <div className="text-sm text-gray-400">Status</div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            <span className="font-bold text-green-500">Verified</span>
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-4 mt-6">
+                    <button
+                      onClick={goToPrevPage}
+                      disabled={currentPage === 1}
+                      className={`flex items-center gap-2 px-4 py-2 border ${
+                        currentPage === 1
+                          ? 'border-gray-800 text-gray-600 cursor-not-allowed'
+                          : 'border-gray-700 text-white hover:bg-gray-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Previous
+                    </button>
+                    <span className="text-gray-400">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      onClick={goToNextPage}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center gap-2 px-4 py-2 border ${
+                        currentPage === totalPages
+                          ? 'border-gray-800 text-gray-600 cursor-not-allowed'
+                          : 'border-gray-700 text-white hover:bg-gray-900'
+                      }`}
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <div>
             <h2 className="text-2xl font-bold mb-6">Achievement Badges</h2>
-            <div className="space-y-4">
-              {badges.map((badge, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <Card hover className="relative overflow-hidden">
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-br ${badge.color} opacity-10`}
-                    />
-                    <div className="relative flex items-center gap-4">
-                      <div className="w-16 h-16 bg-gray-900 border border-gray-700 flex items-center justify-center">
-                        <Award className="w-8 h-8" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-bold mb-1">{badge.name}</div>
-                        <div className="text-sm text-gray-400">
-                          {badge.contributions} contributions
+            {stats.badges.length === 0 ? (
+              <Card>
+                <p className="text-gray-400 text-center py-8">No badges earned yet</p>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {stats.badges.map((badge, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <Card hover className="relative overflow-hidden">
+                      <div
+                        className={`absolute inset-0 bg-gradient-to-br ${badge.color} opacity-10`}
+                      />
+                      <div className="relative flex items-center gap-4">
+                        <div className="w-16 h-16 bg-gray-900 border border-gray-700 flex items-center justify-center">
+                          <Award className="w-8 h-8" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-bold mb-1">{badge.name}</div>
+                          <div className="text-sm text-gray-400">
+                            {badge.contributions} contributions
+                          </div>
+                        </div>
+                        <div
+                          className={`px-3 py-1 bg-gradient-to-br ${badge.color} text-black text-sm font-bold`}
+                        >
+                          {badge.level}
                         </div>
                       </div>
-                      <div
-                        className={`px-3 py-1 bg-gradient-to-br ${badge.color} text-black text-sm font-bold`}
-                      >
-                        {badge.level}
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -250,23 +365,16 @@ export function Contributor() {
           <Card>
             <div className="font-mono text-sm space-y-2">
               <div className="text-gray-500">
-                $ collab-pay history --user contributor.eth
+                $ mergefi history --user {stats.user.login}
               </div>
               <div className="space-y-1 mt-4">
-                <div className="text-gray-400">
-                  [2025-06-15] → awesome-blockchain #234 | $275 PyUSD ✓
-                </div>
-                <div className="text-gray-400">
-                  [2025-06-10] → defi-toolkit #189 | $180 PyUSD ✓
-                </div>
-                <div className="text-gray-400">
-                  [2025-06-05] → awesome-blockchain #201 | $220 PyUSD ✓
-                </div>
-                <div className="text-gray-400">
-                  [2025-05-28] → web3-starter #87 | $95 PyUSD ✓
-                </div>
+                {stats.mergedPRs.slice(0, 4).map((pr) => (
+                  <div key={pr.id} className="text-gray-400">
+                    [{pr.date}] → {pr.repo} {pr.pr} | Verified ✓
+                  </div>
+                ))}
                 <div className="text-gray-500 mt-4">
-                  Total: 22 contributions | $1,540 PyUSD earned
+                  Total: {stats.totalPRs} contributions | ${earnings.totalEarnings} PyUSD earned
                 </div>
               </div>
             </div>
