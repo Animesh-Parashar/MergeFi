@@ -16,7 +16,7 @@ import {
   getListedRepositories,
   getUserListedRepositories,
 } from '../controllers/owner.controller.js';
-import { setUsernameAndChain } from '../controllers/setusername_and_chain.controller.js';
+import { setUsernameAndChain, getchain } from '../controllers/setusername_and_chain.controller.js';
 
 const router = express.Router();
 
@@ -37,6 +37,9 @@ router.post('/repos/unlist', unlistRepository);
 router.get('/repos/listed', getUserListedRepositories);
 router.get('/repos/all-listed', getListedRepositories);
 
+
+
 router.post('/set-user-data', setUsernameAndChain);
+router.post('/getchain',getchain);
 
 export default router;

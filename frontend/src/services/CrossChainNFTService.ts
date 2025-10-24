@@ -56,19 +56,28 @@ export interface NFTMintResult {
     contributorsCount: number;
 }
 
+const contractaddress_mapping: Record<number, string> = {
+    11155420: "0xFd1feBA71394E0AF5F97ea6365fe86870B36c112",
+    80002: '0x',
+    421614: "0x317Dfb49E7a0864536102E5644b60297854a2AF7",
+    84532: "0xFd1feBA71394E0AF5F97ea6365fe86870B36c112",
+    11155111: "0x5627f1EdD6332f321B0a8B7e5D62C2A903B02FC5",
+    10143: "0xFd1feBA71394E0AF5F97ea6365fe86870B36c112",
+};
+
 /**
  * ContributorNFT Contract ABI (only the functions we need)
  */
 const CONTRIBUTOR_NFT_ABI = [
     {
         inputs: [
-            { internalType: 'address[]', name: 'contributors', type: 'address[]' },
-            { internalType: 'uint256[]', name: 'amounts', type: 'uint256[]' },
-            { internalType: 'string[]', name: 'contributorNames', type: 'string[]' },
+            { internalType: 'address', name: 'contributor', type: 'address' },
+            { internalType: 'uint256', name: 'amount', type: 'uint256' },
             { internalType: 'string', name: 'repoName', type: 'string' },
+            { internalType: 'string', name: 'contributorName', type: 'string' },
         ],
-        name: 'batchMintRewardNFTs',
-        outputs: [{ internalType: 'uint256[]', name: '', type: 'uint256[]' }],
+        name: 'mintRewardNFT',
+        outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
         stateMutability: 'nonpayable',
         type: 'function' as const,
     },
@@ -76,43 +85,59 @@ const CONTRIBUTOR_NFT_ABI = [
 
 /**
  * Mint NFTs for contributors across chains using Avail Nexus SDK
- * Bridges USDC tokens and executes batch NFT minting on the target chain
+ * Uses individual mintRewardNFT calls for each contributor
  * 
  * @param params - NFT minting parameters including contributors, repo name, and chain details
  * @returns Promise with transaction result and simulation data
  */
-export const mintContributorNFTsCrossChain = async (
-    params: NFTMintParams
-): Promise<NFTMintResult> => {
+
+// Cross-chain NFT minting parameters
+export interface CrossChainNFTParams {
+    amount: string;
+    walletAddress: string;
+    toChainId: SUPPORTED_CHAINS_IDS;
+    sourceChains: SUPPORTED_CHAINS_IDS[];
+    reponame: string;
+    contributorname: string;
+}
+
+/**
+ * Mint cross-chain reward NFT with source/destination chain info
+ * 
+ * @param params - Cross-chain NFT minting parameters
+ * @returns Promise with transaction result
+ */
+export const mintCrossChainRewardNFT = async (
+    params: CrossChainNFTParams
+): Promise<BridgeAndExecuteResult> => {
     const {
-        contributors,
-        repoName,
-        totalAmount,
+        amount,
+        walletAddress,
         toChainId,
         sourceChains,
+        reponame,
+        contributorname,
     } = params;
 
     // Validate inputs
-    if (contributors.length === 0) {
-        throw new Error('No contributors provided');
+    if (!walletAddress || walletAddress.trim() === '') {
+        throw new Error('Wallet address is required');
     }
-    if (!repoName || repoName.trim() === '') {
-        throw new Error('Repository name is required');
+    if (!amount || parseFloat(amount) <= 0) {
+        throw new Error('Amount must be greater than 0');
     }
 
-    // Log contributor wallet addresses and chain IDs for debugging
-    console.log('=== Payout Modal Data ===');
-    console.log('Repository:', repoName);
-    console.log('Total Amount:', totalAmount);
+    // Get chain names from chain IDs
+    const sourceChain = getChainName(sourceChains[0]);
+    const destinationChain = getChainName(toChainId);
+
+    console.log('=== Cross-Chain NFT Minting ===');
+    console.log('Source Chain:', sourceChain);
+    console.log('Destination Chain:', destinationChain);
+    console.log('Amount:', amount, 'USDC');
+    console.log('Wallet Address:', walletAddress);
     console.log('Target Chain ID:', toChainId);
-    console.log('Contributors with Wallet Data:');
-    contributors.forEach((contributor, index) => {
-        console.log(`  ${index + 1}. ${contributor.name} (@${contributor.address})`);
-        console.log(`     - Wallet Address: ${contributor.address}`);
-        console.log(`     - Chain ID: ${contributor.chainId || 'Not specified'}`);
-        console.log(`     - Payout Amount: ${contributor.amount} USDC`);
-    });
-    console.log('========================');
+    console.log('===============================');
 
     // Get Ethereum provider from browser
     const ethProvider = (window.ethereum as any);
@@ -124,38 +149,31 @@ export const mintContributorNFTsCrossChain = async (
     const sdk = new NexusSDK({ network: 'testnet' });
     await sdk.initialize(ethProvider);
 
-    // Prepare contributor data arrays for batch minting
-    const contributorAddresses = contributors.map(c => c.address);
-    const contributorAmounts = contributors.map(c => {
-        const decimals = TOKEN_METADATA['USDC'].decimals;
-        return parseUnits(c.amount.toString(), decimals);
-    });
-    const contributorNames = contributors.map(c => c.name);
+    const amountWei = parseUnits(amount, TOKEN_METADATA['USDC'].decimals);
 
-    // Build bridge and execute parameters
+    // Build bridge and execute parameters for cross-chain minting
     const bridgeParams: BridgeAndExecuteParams = {
         token: 'USDC',
-        amount: totalAmount,
+        amount: amount,
         toChainId: toChainId,
         sourceChains: sourceChains,
         execute: {
-            contractAddress: NFT_CONTRACT_ADDRESS,
+            contractAddress: contractaddress_mapping[toChainId],
             contractAbi: CONTRIBUTOR_NFT_ABI,
-            functionName: 'batchMintRewardNFTs',
+            functionName: 'mintRewardNFT',
             buildFunctionParams: () => {
-                // Return the function parameters for batch minting
                 return {
                     functionParams: [
-                        contributorAddresses,
-                        contributorAmounts,
-                        contributorNames,
-                        repoName,
+                        walletAddress,                              // contributor (address)
+                        amountWei,                                  // amount (uint256)
+                       reponame,         // repoName (string)
+                        contributorname,      // contributorName (string)
                     ],
                 };
             },
             tokenApproval: {
                 token: 'USDC',
-                amount: totalAmount,
+                amount: amount,
             },
         },
         waitForReceipt: true,
@@ -168,21 +186,15 @@ export const mintContributorNFTsCrossChain = async (
     console.log('Simulation Results:');
     console.log('- Steps:', simulation.steps);
     console.log('- Total estimated cost:', simulation.totalEstimatedCost);
-    console.log('- Approval required:', simulation.metadata?.approvalRequired);
-    console.log('- Bridge receive amount:', simulation.metadata?.bridgeReceiveAmount);
 
     // Execute the bridge and mint transaction
     console.log('Executing cross-chain NFT minting...');
     const bridgeAndExecuteResult: BridgeAndExecuteResult = await sdk.bridgeAndExecute(bridgeParams);
 
-    console.log('NFT minting transaction completed!');
+    console.log('Cross-chain NFT minting completed!');
     console.log('Transaction result:', bridgeAndExecuteResult);
 
-    return {
-        bridgeAndExecuteResult,
-        simulation,
-        contributorsCount: contributors.length,
-    };
+    return bridgeAndExecuteResult;
 };
 
 /**
@@ -198,7 +210,6 @@ export const simulateNFTMinting = async (
     const {
         contributors,
         repoName,
-        totalAmount,
         toChainId,
         sourceChains,
     } = params;
@@ -211,33 +222,30 @@ export const simulateNFTMinting = async (
     const sdk = new NexusSDK({ network: 'testnet' });
     await sdk.initialize(ethProvider);
 
-    const contributorAddresses = contributors.map(c => c.address);
-    const contributorAmounts = contributors.map(c => {
-        const decimals = TOKEN_METADATA['USDC'].decimals;
-        return parseUnits(c.amount.toString(), decimals);
-    });
-    const contributorNames = contributors.map(c => c.name);
+    // Simulate for the first contributor as a representative example
+    const firstContributor = contributors[0];
+    const contributorAmount = parseUnits(firstContributor.amount.toString(), TOKEN_METADATA['USDC'].decimals);
 
     const bridgeParams: BridgeAndExecuteParams = {
         token: 'USDC',
-        amount: totalAmount,
+        amount: firstContributor.amount.toString(),
         toChainId: toChainId,
         sourceChains: sourceChains,
         execute: {
             contractAddress: NFT_CONTRACT_ADDRESS,
             contractAbi: CONTRIBUTOR_NFT_ABI,
-            functionName: 'batchMintRewardNFTs',
+            functionName: 'mintRewardNFT',
             buildFunctionParams: () => ({
                 functionParams: [
-                    contributorAddresses,
-                    contributorAmounts,
-                    contributorNames,
+                    firstContributor.address,
+                    contributorAmount,
                     repoName,
+                    firstContributor.name,
                 ],
             }),
             tokenApproval: {
                 token: 'USDC',
-                amount: totalAmount,
+                amount: firstContributor.amount.toString(),
             },
         },
         waitForReceipt: false,
