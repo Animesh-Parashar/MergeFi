@@ -14,8 +14,13 @@ import {
 } from 'lucide-react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { Modal } from '../components/Modal';
 import ContributorsModal from '../components/ContributorsModal';
+import PayoutModal from '../components/PayoutModal';
+import {
+  mintContributorNFTsCrossChain,
+  SUPPORTED_CHAIN_IDS,
+  type Contributor as NFTContributor
+} from '../services/CrossChainNFTService';
 
 
 interface Repository {
@@ -46,6 +51,8 @@ interface Contributor {
   avatar_url: string;
   contributions: number;
   weight?: number;
+  walletAddress?: string;
+  chainId?: number;
 }
 
 interface User {
@@ -76,8 +83,6 @@ interface MaintainerData {
 }
 
 export function Maintainer() {
-  const [showRewardModal, setShowRewardModal] = useState(false);
-  const [showApproveModal, setShowApproveModal] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [user, setUser] = useState<User | null>(null);
@@ -85,7 +90,6 @@ export function Maintainer() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
-  const [fundAmount, setFundAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [contributorsModal, setContributorsModal] = useState({
     isOpen: false,
@@ -95,12 +99,9 @@ export function Maintainer() {
   const [payoutContributors, setPayoutContributors] = useState<Contributor[]>([]);
   const [payoutFundAmount, setPayoutFundAmount] = useState('');
   const [loadingRepoId, setLoadingRepoId] = useState<number | null>(null);
-  const [showCrossChainModal, setShowCrossChainModal] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [totalForkedRepos, setTotalForkedRepos] = useState(0);
   const [listingRepoId, setListingRepoId] = useState<number | null>(null);
-  const reposPerPage = 6; // Changed from 3 to 6
+  const reposPerPage = 6;
 
   useEffect(() => {
     fetchMaintainerData();
@@ -217,14 +218,14 @@ export function Maintainer() {
   };
 
   const handlePayout = async (repo: Repository) => {
-    // Fetch contributors for this repository from the API
+    // Fetch contributors for this repository from the API with wallet data
     try {
       setError(null);
       setLoadingRepoId(repo.id);
       const [owner, repoName] = repo.full_name.split('/');
 
       const response = await axios.get(
-        `http://localhost:5000/api/maintainer/${owner}/${repoName}/contributors`,
+        `http://localhost:5000/api/maintainer/${owner}/${repoName}/contributors-wallets`,
         { withCredentials: true }
       );
 
@@ -235,7 +236,9 @@ export function Maintainer() {
         name: contributor.name || contributor.login,
         avatar_url: contributor.avatar_url,
         contributions: contributor.contributions,
-        weight: 5 // Default weight of 5 (middle value between 1-10)
+        weight: 5, // Default weight of 5 (middle value between 1-10)
+        walletAddress: contributor.walletAddress,
+        chainId: contributor.chainId ? parseInt(contributor.chainId) : undefined
       }));
 
       if (contributors.length === 0) {
@@ -282,26 +285,65 @@ export function Maintainer() {
       return;
     }
 
+    // Check if contributors have wallet addresses
+    const contributorsWithoutWallets = payoutContributors.filter(c => !c.walletAddress);
+    if (contributorsWithoutWallets.length > 0) {
+      setError(`Some contributors don't have wallet addresses registered: ${contributorsWithoutWallets.map(c => c.login).join(', ')}`);
+      return;
+    }
+
     try {
-      // Calculate total weight
-      const totalWeight = payoutContributors.reduce((sum, c) => sum + (c.weight || 0), 0);
+      // Calculate weighted contributions (contributions × weight) for each contributor
       const fundAmountNum = parseFloat(payoutFundAmount);
 
-      // Calculate individual payouts
-      const payouts = payoutContributors.map(contributor => ({
-        ...contributor,
-        payout: (fundAmountNum * (contributor.weight || 0)) / totalWeight
-      }));
+      // Calculate total weighted contributions: Σ(contributions × weight)
+      const totalWeightedContributions = payoutContributors.reduce((sum, c) =>
+        sum + (c.contributions * (c.weight || 0)), 0
+      );
 
-      console.log('Processing payout:', {
-        repo: selectedRepo.name,
-        totalAmount: fundAmountNum,
-        payouts
+      if (totalWeightedContributions === 0) {
+        setError('Total weighted contributions cannot be zero');
+        return;
+      }
+
+      // Calculate individual payouts using: (contributions × weight) / Σ(contributions × weight) × totalPool
+      const nftContributors: NFTContributor[] = payoutContributors.map(contributor => {
+        const weightedContribution = contributor.contributions * (contributor.weight || 0);
+        const amount = (weightedContribution / totalWeightedContributions) * fundAmountNum;
+        // Round to 2 decimal places
+        const roundedAmount = Math.round(amount * 100) / 100;
+
+        return {
+          address: contributor.walletAddress || '0x0000000000000000000000000000000000000000',
+          amount: roundedAmount,
+          name: contributor.name || contributor.login,
+          chainId: contributor.chainId
+        };
       });
 
-      // TODO: Make API call to process payout
+      console.log('Processing payout with NFT minting:', {
+        repo: selectedRepo.name,
+        totalAmount: fundAmountNum.toFixed(2),
+        totalWeightedContributions,
+        contributors: nftContributors.map(c => ({
+          name: c.name,
+          amount: c.amount.toFixed(2),
+          percentage: ((c.amount / fundAmountNum) * 100).toFixed(2) + '%'
+        }))
+      });
+
+      // Call cross-chain NFT minting service
+      await mintContributorNFTsCrossChain({
+        contributors: nftContributors,
+        repoName: selectedRepo.name,
+        totalAmount: payoutFundAmount,
+        toChainId: SUPPORTED_CHAIN_IDS.ARBITRUM_SEPOLIA, // Default target chain
+        sourceChains: [SUPPORTED_CHAIN_IDS.SEPOLIA], // Default source chain
+      });
+
+      // TODO: Make API call to record payout in database
       // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/payout`, {
-      //   contributors: payouts,
+      //   contributors: nftContributors,
       //   totalAmount: fundAmountNum
       // }, { withCredentials: true });
 
@@ -314,67 +356,16 @@ export function Maintainer() {
         )
       );
 
+      alert('Payout and NFT minting completed successfully!');
       setShowPayoutModal(false);
       setPayoutContributors([]);
       setPayoutFundAmount('');
       setSelectedRepo(null);
       setError(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing payout:', error);
-      setError('Failed to process payout');
+      setError(error.message || 'Failed to process payout');
     }
-  };
-
-  const handleAddFunds = (repo: Repository) => {
-    setSelectedRepo(repo);
-    setFundAmount('');
-    setShowRewardModal(true);
-  };
-
-  const submitFunds = async () => {
-    if (!selectedRepo || !fundAmount || parseFloat(fundAmount) <= 0) return;
-
-    try {
-      // TODO: Make API call to add funds to repository pool
-      // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/add-funds`, {
-      //   amount: parseFloat(fundAmount)
-      // }, { withCredentials: true });
-
-      // Update local state
-      setRepositories(prev =>
-        prev.map(repo =>
-          repo.id === selectedRepo.id
-            ? { ...repo, poolAmount: (repo.poolAmount || 0) + parseFloat(fundAmount) }
-            : repo
-        )
-      );
-
-      setShowRewardModal(false);
-      setFundAmount('');
-      setSelectedRepo(null);
-    } catch (error) {
-      console.error('Error adding funds:', error);
-    }
-  };
-
-  const handleCrossChainPayment = (transaction: any) => {
-    if (isProcessingPayment) return; // Prevent multiple clicks
-
-    setSelectedTransaction(transaction);
-    setShowCrossChainModal(true);
-    setIsProcessingPayment(true);
-  };
-
-  const handlePaymentComplete = (result: any) => {
-    console.log('Payment completed:', result);
-    setIsProcessingPayment(false);
-    // You might want to call an API to update the transaction status
-  };
-
-  const handleCrossChainModalClose = () => {
-    setShowCrossChainModal(false);
-    setIsProcessingPayment(false);
-    setSelectedTransaction(null);
   };
 
   // Pagination calculations
@@ -395,43 +386,6 @@ export function Maintainer() {
 
   // Calculate frontend stats
   const openRepos = repositories.filter(repo => repo.isOpenToContributions).length;
-  const totalPoolValue = repositories.reduce((sum, repo) => sum + (repo.poolAmount || 0), 0);
-
-  // Mock pending transactions (in a real app, this would come from the backend)
-  const pendingTransactions = [
-    {
-      id: 1,
-      contributor: '0xF41E4fB4e7F1F6E484033c878f078A2DF57dB854',
-      pr: '#234',
-      repo: repositories[0]?.name || 'awesome-blockchain',
-      amount: 250,
-      aiSuggestion: 275,
-    },
-    {
-      id: 2,
-      contributor: 'bob.dev',
-      pr: '#189',
-      repo: repositories[1]?.name || 'defi-toolkit',
-      amount: 180,
-      aiSuggestion: 180,
-    },
-    {
-      id: 3,
-      contributor: 'charlie.code',
-      pr: '#156',
-      repo: repositories[0]?.name || 'awesome-blockchain',
-      amount: 320,
-      aiSuggestion: 350,
-    },
-  ];
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
 
   return (
     <div className="min-h-screen bg-black text-white font-mono p-6 lg:p-12">
@@ -751,78 +705,6 @@ export function Maintainer() {
         </div>
       </motion.div>
 
-      {/* Add Funds Modal */}
-      <Modal
-        isOpen={showRewardModal}
-        onClose={() => setShowRewardModal(false)}
-        title="Add Funds to Pool"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Repository</label>
-            <div className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded">
-              {selectedRepo?.name || 'Select Repository'}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Amount (USDC)</label>
-            <input
-              type="number"
-              placeholder="1000"
-              value={fundAmount}
-              onChange={(e) => setFundAmount(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded focus:border-gray-500 outline-none"
-            />
-          </div>
-          <div className="text-sm text-gray-400">
-            Current pool: ${selectedRepo?.poolAmount?.toLocaleString() || 0} USDC
-          </div>
-          <Button
-            className="w-full"
-            onClick={submitFunds}
-            disabled={!fundAmount || parseFloat(fundAmount) <= 0}
-          >
-            Add ${fundAmount || '0'} to Pool
-          </Button>
-        </div>
-      </Modal>
-
-      {/* Approve Transaction Modal */}
-      <Modal
-        isOpen={showApproveModal}
-        onClose={() => setShowApproveModal(false)}
-        title="Approve Transaction"
-      >
-        <div className="space-y-6">
-          <div className="space-y-4">
-            <div className="flex justify-between py-2 border-b border-gray-800">
-              <span className="text-gray-400">Contributor</span>
-              <span className="font-bold">alice.eth</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-gray-800">
-              <span className="text-gray-400">Pull Request</span>
-              <span className="font-bold">#234</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-gray-800">
-              <span className="text-gray-400">Amount</span>
-              <span className="font-bold">$250 USDC</span>
-            </div>
-            <div className="flex justify-between py-2">
-              <span className="text-gray-400">AI Suggestion</span>
-              <span className="font-bold text-yellow-400">$275 USDC</span>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <Button className="flex-1" onClick={() => setShowApproveModal(false)}>
-              Approve $250
-            </Button>
-            <Button variant="outline" className="flex-1" onClick={() => setShowApproveModal(false)}>
-              Use AI Amount
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       {/* Contributors Modal */}
       <ContributorsModal
         isOpen={contributorsModal.isOpen}
@@ -832,117 +714,21 @@ export function Maintainer() {
       />
 
       {/* Payout Modal */}
-      <Modal
+      <PayoutModal
         isOpen={showPayoutModal}
-        onClose={() => setShowPayoutModal(false)}
-        title={`Payout Contributors - ${selectedRepo?.name}`}
-      >
-        <div className="space-y-6">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded">
-              {error}
-            </div>
-          )}
-
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Contributors</h3>
-            <div className="space-y-3">
-              {payoutContributors.length > 0 ? (
-                payoutContributors.map((contributor) => (
-                  <div key={contributor.id} className="bg-gray-800 p-4 rounded border border-gray-700">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={contributor.avatar_url}
-                          alt={contributor.name}
-                          className="w-8 h-8 rounded-full"
-                        />
-                        <div>
-                          <div className="text-white font-medium">{contributor.name}</div>
-                          <div className="text-gray-400 text-sm">@{contributor.login}</div>
-                          <div className="text-gray-500 text-xs">{contributor.contributions} contributions</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-gray-400 text-sm">Weight:</label>
-                        <select
-                          value={contributor.weight || 5}
-                          onChange={(e) => handleWeightChange(contributor.id, parseInt(e.target.value))}
-                          className="bg-gray-900 border border-gray-600 text-white px-2 py-1 rounded text-sm w-16"
-                        >
-                          {[...Array(10)].map((_, i) => (
-                            <option key={i + 1} value={i + 1}>
-                              {i + 1}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-gray-400 text-center py-4">
-                  No contributors found for this repository.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Total Fund Amount (USDC)</label>
-            <input
-              type="number"
-              placeholder="1000"
-              value={payoutFundAmount}
-              onChange={(e) => setPayoutFundAmount(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 p-3 text-white rounded focus:border-gray-500 outline-none"
-            />
-            {selectedRepo?.poolAmount !== undefined && selectedRepo.poolAmount > 0 && (
-              <div className="text-sm text-gray-400 mt-1">
-                Available in pool: ${selectedRepo.poolAmount.toLocaleString()} USDC
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-4">
-            <Button
-              className="flex-1"
-              onClick={handleConfirmPayout}
-              disabled={!payoutFundAmount || parseFloat(payoutFundAmount) <= 0}
-            >
-              Confirm Payout
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => {
-                setShowPayoutModal(false);
-                setError(null);
-              }}
-            >
-              Cancel
-            </Button>
-
-
-          </div>
-        </div>
-      </Modal>
+        onClose={() => {
+          setShowPayoutModal(false);
+          setError(null);
+        }}
+        selectedRepo={selectedRepo}
+        contributors={payoutContributors}
+        fundAmount={payoutFundAmount}
+        error={error}
+        onFundAmountChange={setPayoutFundAmount}
+        onWeightChange={handleWeightChange}
+        onConfirmPayout={handleConfirmPayout}
+      />
 
     </div>
   );
-}
-
-// Helper function to format date
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-
-  if (diffInDays === 0) return 'Today';
-  if (diffInDays === 1) return 'Yesterday';
-  if (diffInDays < 7) return `${diffInDays} days ago`;
-  if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
-  if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} months ago`;
-  return `${Math.floor(diffInDays / 365)} years ago`;
 }
