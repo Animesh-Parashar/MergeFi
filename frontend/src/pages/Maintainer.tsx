@@ -16,11 +16,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import ContributorsModal from '../components/ContributorsModal';
 import PayoutModal from '../components/PayoutModal';
-import {
-  mintContributorNFTsCrossChain,
-  SUPPORTED_CHAIN_IDS,
-  type Contributor as NFTContributor
-} from '../services/CrossChainNFTService';
+
 
 
 interface Repository {
@@ -52,6 +48,13 @@ interface Contributor {
   contributions: number;
   weight?: number;
   walletAddress?: string;
+  chainId?: number;
+}
+
+interface NFTContributor {
+  address: string;
+  amount: number;
+  name: string;
   chainId?: number;
 }
 
@@ -333,13 +336,74 @@ export function Maintainer() {
       });
 
       // Call cross-chain NFT minting service
-      await mintContributorNFTsCrossChain({
-        contributors: nftContributors,
-        repoName: selectedRepo.name,
-        totalAmount: payoutFundAmount,
-        toChainId: SUPPORTED_CHAIN_IDS.ARBITRUM_SEPOLIA, // Default target chain
-        sourceChains: [SUPPORTED_CHAIN_IDS.SEPOLIA], // Default source chain
-      });
+      console.log('Starting NFT minting for contributors...');
+      
+      // Import NFT services
+      const { callMintCrossChainRewardNFT } = await import('../services/runtransaction');
+      
+      // Get current MetaMask connected chain as source chain
+      let sourceChainId = 11155111; // Default to Sepolia
+      
+      if (window.ethereum) {
+        try {
+          const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+          sourceChainId = parseInt(chainId, 16);
+          console.log('Connected MetaMask chain ID:', sourceChainId);
+        } catch (error) {
+          console.error('Error getting MetaMask chain ID:', error);
+        }
+      }
+      
+      // API function to get user's chainId preference
+      const getUserChainId = async (githubUsername: string): Promise<number | null> => {
+        try {
+          const response = await axios.post('http://localhost:5000/api/getchain', { 
+            github_username: githubUsername 
+          }, { withCredentials: true });
+          
+          // API returns chainId directly as number
+          const chainId = response.data?.chainId || response.data?.chain;
+          return chainId ? parseInt(chainId) : null;
+        } catch (error) {
+          console.error(`Error getting chain for user ${githubUsername}:`, error);
+          return null;
+        }
+      };
+      
+      // Process each contributor individually
+      for (const contributor of nftContributors) {
+        try {
+          console.log(`Processing NFT mint for ${contributor.name} (${contributor.address})`);
+          
+          // Get user's preferred chainId from API
+          const userChainId = await getUserChainId(contributor.name);
+          console.log(`User ${contributor.name} preferred chainId:`, userChainId);
+          
+          // Use the user's preferred chainId as target, fallback to source chain if not found
+          const targetChainId = userChainId || sourceChainId;
+          
+          console.log(`Minting NFT from chain ${sourceChainId} to chain ${targetChainId} for ${contributor.name}`);
+          
+          // Call NFT minting function with proper parameters
+          const result = await callMintCrossChainRewardNFT(
+            contributor.amount.toString(),  // amount
+            contributor.address,            // walletAddress  
+            targetChainId,                 // toChainId (user's preferred chain)
+            [sourceChainId],               // sourceChains (MetaMask connected chain)
+            selectedRepo.name,             // reponame
+            contributor.name               // contributorname
+          );
+          
+          console.log(`✅ NFT minted successfully for ${contributor.name}:`, result);
+          
+        } catch (error) {
+          console.error(`❌ Failed to mint NFT for ${contributor.name}:`, error);
+          // Continue with other contributors even if one fails
+        }
+      }
+      
+      console.log('🎉 NFT minting process completed for all contributors.');
+     
 
       // TODO: Make API call to record payout in database
       // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/payout`, {

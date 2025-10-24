@@ -2,12 +2,9 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 contract ContributorRewardNFT is ERC721 {
-    using Counters for Counters.Counter;
-
-    Counters.Counter private _tokenIdCounter;
+    uint256 private _tokenIdCounter;
 
     struct ContributorReward {
         uint256 amount; // Amount paid to contributor (in wei/smallest unit)
@@ -54,8 +51,8 @@ contract ContributorRewardNFT is ERC721 {
             "Contributor name cannot be empty"
         );
 
-        uint256 tokenId = _tokenIdCounter.current();
-        _tokenIdCounter.increment();
+        uint256 tokenId = _tokenIdCounter;
+        _tokenIdCounter++;
 
         // Store reward data
         contributorRewards[tokenId] = ContributorReward({
@@ -97,7 +94,8 @@ contract ContributorRewardNFT is ERC721 {
     function getRewardData(
         uint256 tokenId
     ) external view returns (ContributorReward memory) {
-        require(_exists(tokenId), "Token does not exist");
+        // Check existence via stored reward timestamp (set at mint); avoids calling ERC721 internals
+        require(contributorRewards[tokenId].timestamp != 0, "Token does not exist");
         return contributorRewards[tokenId];
     }
 
@@ -105,7 +103,7 @@ contract ContributorRewardNFT is ERC721 {
      * @dev Get total number of minted rewards
      */
     function totalSupply() external view returns (uint256) {
-        return _tokenIdCounter.current();
+        return _tokenIdCounter;
     }
 
     /**
