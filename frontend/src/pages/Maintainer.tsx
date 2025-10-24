@@ -319,7 +319,7 @@ export function Maintainer() {
         return {
           address: contributor.walletAddress || '0x0000000000000000000000000000000000000000',
           amount: roundedAmount,
-          name: contributor.name || contributor.login,
+          name: contributor.login,
           chainId: contributor.chainId
         };
       });
@@ -337,30 +337,32 @@ export function Maintainer() {
 
       // Call cross-chain NFT minting service
       console.log('Starting NFT minting for contributors...');
-      
+
       // Import NFT services
       const { callMintCrossChainRewardNFT } = await import('../services/runtransaction');
-      
+
       // Get current MetaMask connected chain as source chain
       let sourceChainId = 11155111; // Default to Sepolia
-      
-      if (window.ethereum) {
-        try {
-          const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-          sourceChainId = parseInt(chainId, 16);
-          console.log('Connected MetaMask chain ID:', sourceChainId);
-        } catch (error) {
-          console.error('Error getting MetaMask chain ID:', error);
-        }
-      }
-      
+
+      // if (window.ethereum) {
+      //   try {
+      //     const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      //     sourceChainId = parseInt(chainId, 16);
+      //     console.log('Connected MetaMask chain ID:', sourceChainId);
+      //   } catch (error) {
+      //     console.error('Error getting MetaMask chain ID:', error);
+      //   }
+      // }
+
       // API function to get user's chainId preference
       const getUserChainId = async (githubUsername: string): Promise<number | null> => {
         try {
-          const response = await axios.post('http://localhost:5000/api/getchain', { 
-            github_username: githubUsername 
+
+
+          const response = await axios.post('http://localhost:5000/api/getchain', {
+            github_username: githubUsername
           }, { withCredentials: true });
-          
+
           // API returns chainId directly as number
           const chainId = response.data?.chainId || response.data?.chain;
           return chainId ? parseInt(chainId) : null;
@@ -369,21 +371,25 @@ export function Maintainer() {
           return null;
         }
       };
-      
+
       // Process each contributor individually
       for (const contributor of nftContributors) {
         try {
           console.log(`Processing NFT mint for ${contributor.name} (${contributor.address})`);
-          
+
           // Get user's preferred chainId from API
           const userChainId = await getUserChainId(contributor.name);
           console.log(`User ${contributor.name} preferred chainId:`, userChainId);
-          
+
           // Use the user's preferred chainId as target, fallback to source chain if not found
           const targetChainId = userChainId || sourceChainId;
-          
+
+          if (targetChainId === sourceChainId) {
+      console.warn(`⚠️ User ${contributor.name} target chain same as source. No bridging needed.`);
+    }
+
           console.log(`Minting NFT from chain ${sourceChainId} to chain ${targetChainId} for ${contributor.name}`);
-          
+
           // Call NFT minting function with proper parameters
           const result = await callMintCrossChainRewardNFT(
             contributor.amount.toString(),  // amount
@@ -393,17 +399,17 @@ export function Maintainer() {
             selectedRepo.name,             // reponame
             contributor.name               // contributorname
           );
-          
+
           console.log(`✅ NFT minted successfully for ${contributor.name}:`, result);
-          
+
         } catch (error) {
           console.error(`❌ Failed to mint NFT for ${contributor.name}:`, error);
           // Continue with other contributors even if one fails
         }
       }
-      
+
       console.log('🎉 NFT minting process completed for all contributors.');
-     
+
 
       // TODO: Make API call to record payout in database
       // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/payout`, {

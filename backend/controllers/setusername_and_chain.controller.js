@@ -44,7 +44,7 @@ const setUsernameAndChain = async (req, res) => {
         .eq('github_username', github_username)
         .select()
         .single();
-      
+
       data = updateData;
       error = updateError;
     } else {
@@ -58,7 +58,7 @@ const setUsernameAndChain = async (req, res) => {
         })
         .select()
         .single();
-      
+
       data = insertData;
       error = insertError;
     }
@@ -105,28 +105,26 @@ const getchain = async (req, res) => {
 
     if (error) {
       console.error('Error fetching chain for username:', error);
-      return res.status(404).json({
-        error: "User not found",
-        message: "No chain preference found for this user"
+
+      // If user not found, return 404 instead of 403
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({
+          error: "User not found",
+          message: "No chain preference found for this user. Please register your wallet first.",
+          github_username: github_username
+        });
+      }
+
+      // Other database errors
+      return res.status(500).json({
+        error: "Database error",
+        message: error.message
       });
     }
-
-    // Chain name to chainId mapping
-    const chainMapping = {
-      'optimism-sepolia': 11155420,
-      'polygon-amoy': 80002,
-      'arbitrum-sepolia': 421614,
-      'base-sepolia': 84532,
-      'sepolia': 11155111,
-      'monad-testnet': 10143,
-    };
-
-    const chainId = chainMapping[data.chain.toLowerCase()] || null;
 
     res.status(200).json({
       success: true,
       chain: data.chain,
-      chainId: chainId
     });
 
   } catch (error) {
@@ -138,4 +136,4 @@ const getchain = async (req, res) => {
   }
 }
 
-export { setUsernameAndChain ,getchain};
+export { setUsernameAndChain, getchain };

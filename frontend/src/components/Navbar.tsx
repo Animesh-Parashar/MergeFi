@@ -38,11 +38,11 @@ export function Navbar() {
   const sendUserData = async (walletAddress: string, chainId: number, githubUsername: string = 'demo_user') => {
     setIsSyncing(true);
     try {
-      console.log('Sending user data:', {
-        github_username: githubUsername,
-        walletaddress: walletAddress,
-        chain: chainId
-      });
+      // console.log('Sending user data:', {
+      //   github_username: githubUsername,
+      //   walletaddress: walletAddress,
+      //   chain: chainId
+      // });
 
       const response = await fetch('http://localhost:5000/api/set-user-data', {
         method: 'POST',
@@ -58,7 +58,7 @@ export function Navbar() {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ User data saved successfully:', result);
+        // console.log('✅ User data saved successfully:', result);s
       } else {
         const error = await response.json();
         console.error('❌ Failed to save user data:', error);
@@ -79,7 +79,7 @@ export function Navbar() {
 
       if (response.ok) {
         const userData = await response.json();
-        console.log('✅ Fetched GitHub user:', userData.login);
+        // console.log('✅ Fetched GitHub user:', userData.login);
         return userData.login; // GitHub username is in 'login' field
       } else {
         console.log('❌ Not authenticated or no GitHub token');
@@ -96,14 +96,14 @@ export function Navbar() {
     if (isConnected && address && chainId) {
       const sendData = async () => {
         const githubUsername = await fetchGithubUsername();
-        console.log('🔄 Wallet state changed - sending user data:', {
-          address: formatAddress(address),
-          chainId,
-          githubUsername
-        });
+        // console.log('🔄 Wallet state changed - sending user data:', {
+        //   address: formatAddress(address),
+        //   chainId,
+        //   githubUsername
+        // });
         sendUserData(address, chainId, githubUsername);
       };
-      
+
       sendData();
     }
   }, [isConnected, address, chainId]);
