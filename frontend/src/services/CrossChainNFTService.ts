@@ -310,9 +310,9 @@ export const mintCrossChainRewardNFT = async (
 
     // STEP 3: Store transaction in database
     try {
-        const txHash = bridgeAndExecuteResult.executeTransactionHash ||
-            bridgeAndExecuteResult.bridgeTransactionHash ||
-            bridgeAndExecuteResult.approvalTransactionHash;
+        const txHash = bridgeAndExecuteResult.executeTransactionHash 
+            // bridgeAndExecuteResult.bridgeTransactionHash ||
+            // bridgeAndExecuteResult.approvalTransactionHash;
         const toChainIdDecimal = bridgeAndExecuteResult.toChainId;
         if (txHash) {
             await storeTransactionInDB(txHash, currentChainIdDecimal, toChainIdDecimal);
@@ -345,20 +345,28 @@ async function storeTransactionInDB(
         //         to_chain_id: toChainId,
         //     }),
         // });
-
+        console.log({ tx_hash: txHash,
+            from_chain_id: fromChainId,
+            to_chain_id: toChainId,});
         const response = await axios.post('http://localhost:5000/api/transactions/saveTx', {
             tx_hash: txHash,
             from_chain_id: fromChainId,
             to_chain_id: toChainId,
+        }, {
+            withCredentials: true, // Add credentials if needed
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
 
-        const result = await response.data;
+        const result =  response.data;
+        console.log('Response from server:', result);
 
-        if (!result.success) {
+        if ( result.message !== 'Transaction stored successfully') {
             throw new Error(result.error || 'Failed to store transaction');
         }
 
-        console.log('✅ Transaction stored in database:', result.transaction.id);
+        //console.log('✅ Transaction stored in database:', result.transaction.id);
     } catch (error) {
         console.error('❌ Failed to store transaction in database:', error);
         // Don't throw - transaction was successful even if DB storage failed
@@ -412,7 +420,7 @@ export async function switchToNetwork(chainId: number, reason?: string): Promise
     } catch (switchError: any) {
         // If the chain is not added to MetaMask, add it
         if (switchError.code === 4902) {
-            console.log(`➕ Adding ${getChainName(chainId)} to MetaMask...`);
+            console.log(`Adding ${getChainName(chainId)} to MetaMask...`);
             const chainConfig = getChainConfig(chainId);
             await ethereum.request({
                 method: 'wallet_addEthereumChain',
