@@ -126,9 +126,28 @@ export function Transactions() {
                 const txStatus = blockscoutData.result || blockscoutData.status;
                 console.log(`  ✅ Found on ${chainNetwork.name} - Status: ${txStatus}`);
                 
-                // Parse value (in Wei, convert to ETH)
-                const valueInWei = blockscoutData.value || '0';
-                const valueInEth = valueInWei === '0' ? '0.000000' : (parseFloat(valueInWei) / 1e18).toFixed(6);
+                // Check for token transfers (USDC, USDT, etc.)
+                let displayValue = '0.000000';
+                let displayToken = chainNetwork.currency;
+                
+                if (blockscoutData.token_transfers && blockscoutData.token_transfers.length > 0) {
+                  // Use the first token transfer (usually the main one)
+                  const tokenTransfer = blockscoutData.token_transfers[0];
+                  const tokenValue = tokenTransfer.total?.value || '0';
+                  const tokenDecimals = parseInt(tokenTransfer.total?.decimals || tokenTransfer.token?.decimals || '18');
+                  const tokenSymbol = tokenTransfer.token?.symbol || 'Unknown';
+                  
+                  // Convert token value based on decimals
+                  displayValue = tokenValue === '0' ? '0.00' : (parseFloat(tokenValue) / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals === 6 ? 2 : 6);
+                  displayToken = tokenSymbol;
+                  
+                  console.log(`  💰 Token Transfer: ${displayValue} ${displayToken}`);
+                } else {
+                  // No token transfer, check native ETH value
+                  const valueInWei = blockscoutData.value || '0';
+                  displayValue = valueInWei === '0' ? '0.000000' : (parseFloat(valueInWei) / 1e18).toFixed(6);
+                  displayToken = chainNetwork.currency;
+                }
                 
                 // Parse fee
                 const feeInWei = blockscoutData.fee?.value || blockscoutData.transaction_burnt_fee || '0';
@@ -141,8 +160,8 @@ export function Transactions() {
                   ...tx,
                   from_address: blockscoutData.from?.hash || blockscoutData.from || 'Unknown',
                   to_address: blockscoutData.to?.hash || blockscoutData.to || 'Unknown',
-                  value: valueInEth,
-                  token: chainNetwork.currency,
+                  value: displayValue,
+                  token: displayToken,
                   blockNumber: blockNum ? blockNum.toString() : 'Pending',
                   confirmations: blockscoutData.confirmations || 0,
                   fee: feeInEth,
@@ -186,15 +205,21 @@ export function Transactions() {
       const pendingTxs = enrichedTxs.filter(
         tx => tx.status === 'pending'
       ).length;
-      const totalVolume = enrichedTxs.reduce((sum, tx) => {
-        const value = parseFloat(tx.value || '0');
-        return sum + (isNaN(value) ? 0 : value);
+      
+      // Calculate total volume in USDC (only count USDC/USDT transactions)
+      const totalVolumeUSDC = enrichedTxs.reduce((sum, tx) => {
+        // Only count stablecoin transactions (USDC, USDT)
+        if (tx.token === 'USDC' || tx.token === 'USDT') {
+          const value = parseFloat(tx.value || '0');
+          return sum + (isNaN(value) ? 0 : value);
+        }
+        return sum;
       }, 0);
 
       setStats({
         totalTransactions: totalTxs,
         successfulTxs,
-        totalVolume: totalVolume.toFixed(4),
+        totalVolume: totalVolumeUSDC.toFixed(2),
         pendingTxs,
       });
 
@@ -324,7 +349,7 @@ export function Transactions() {
               <div>
                 <div className="text-gray-400 text-sm mb-2">Total Volume</div>
                 <div className="text-2xl font-bold">{stats.totalVolume}</div>
-                <div className="text-green-400 text-sm mt-1">ETH</div>
+                <div className="text-green-400 text-sm mt-1">USDC</div>
               </div>
               <TrendingUp className="w-10 h-10 text-gray-700" />
             </div>
