@@ -5,11 +5,11 @@ export const storeTransaction = async (req, res) => {
   try {
     const { 
       tx_hash, 
-      chain_id,
-      description
+      from_chain_id,
+      to_chain_id
     } = req.body;
 
-    if (!tx_hash || !chain_id) {
+    if (!tx_hash || !from_chain_id) {
       return res.status(400).json({ 
         error: 'Transaction hash and chain ID are required' 
       });
@@ -20,8 +20,8 @@ export const storeTransaction = async (req, res) => {
       .insert([
         {
           tx_hash,
-          chain_id,
-          description: description || '',
+          from_chain_id,
+          to_chain_id,
           created_at: new Date().toISOString()
         }
       ])
@@ -52,7 +52,7 @@ export const storeTransaction = async (req, res) => {
 // Get all transactions
 export const getAllTransactions = async (req, res) => {
   try {
-    const { chain_id, limit = 50 } = req.query;
+    const { from_chain_id, limit = 50 } = req.query;
 
     let query = supabase
       .from('transactions')
@@ -60,8 +60,8 @@ export const getAllTransactions = async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(parseInt(limit));
 
-    if (chain_id) {
-      query = query.eq('chain_id', chain_id);
+    if (from_chain_id) {
+      query = query.eq('from_chain_id', from_chain_id);
     }
 
     const { data, error } = await query;

@@ -275,18 +275,18 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                         </p>
                         <p>
                           <strong>Complexity:</strong>{" "}
-                          {analysisResult.complexity}
+                          {analysisResult.complexity || "N/A"}
                         </p>
                         <p>
                           <strong>Quality Rating:</strong>{" "}
-                          {analysisResult.quality_rating} / 10
+                          {analysisResult.quality_rating ?? 0} / 10
                         </p>
                         <p>
                           <strong>Notes:</strong>{" "}
-                          {analysisResult.analysis_notes}
+                          {analysisResult.analysis_notes || "No notes available"}
                         </p>
                       </div>
-                      <div className="pt-4 border-t border-gray-700">
+                      {/* <div className="pt-4 border-t border-gray-700">
                         <p className="text-sm text-gray-400">
                           Suggested Payout:
                         </p>
@@ -298,9 +298,12 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                           {" "}
                         </p>
                       </div>
-                      <button className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold">
+                      <button
+                        className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={(analysisResult.suggested_payout_usdc ?? 0) <= 0}
+                      >
                         Add to Payout
-                      </button>
+                      </button> */}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-500">

@@ -67,7 +67,6 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
     } finally {
       setLoading(false);
     }
-    console.log(stats)
   };
   const handleAnalyzeClick = (contributor: Contributor) => {
     setSelectedContributor(contributor);

@@ -104,6 +104,14 @@ export function Maintainer() {
   const [loadingRepoId, setLoadingRepoId] = useState<number | null>(null);
   const [totalForkedRepos, setTotalForkedRepos] = useState(0);
   const [listingRepoId, setListingRepoId] = useState<number | null>(null);
+
+  // Add new state for listing modal
+  const [listingModal, setListingModal] = useState({
+    isOpen: false,
+    repo: null as Repository | null,
+    poolAmount: ''
+  });
+
   const reposPerPage = 6;
 
   useEffect(() => {
@@ -126,14 +134,18 @@ export function Maintainer() {
         withCredentials: true,
       });
 
-      const listedRepoIds = new Set(listedReposResponse.data.repos.map((r: any) => r.github_repo_id));
+      const listedRepos = listedReposResponse.data.repos;
+      const listedRepoMap = new Map(listedRepos.map((r: any) => [r.github_repo_id, r]));
 
-      // Add status for repositories
-      const reposWithStatus = repositories.map((repo: Repository) => ({
-        ...repo,
-        isOpenToContributions: listedRepoIds.has(repo.id),
-        poolAmount: 0,
-      }));
+      // Add status and pool amount for repositories
+      const reposWithStatus = repositories.map((repo: Repository) => {
+        const listedRepo = listedRepoMap.get(repo.id);
+        return {
+          ...repo,
+          isOpenToContributions: !!listedRepo,
+          poolAmount: listedRepo?.pool_reward || 0, // Fetch pool_reward from backend
+        };
+      });
 
       setUser(user);
       setRepositories(reposWithStatus);
@@ -149,13 +161,32 @@ export function Maintainer() {
   };
 
   const handleListRepo = async (repo: Repository) => {
+    // Show modal to enter pool amount
+    setListingModal({
+      isOpen: true,
+      repo: repo,
+      poolAmount: ''
+    });
+  };
+
+  const handleConfirmListing = async () => {
+    const { repo, poolAmount } = listingModal;
+
+    if (!repo) return;
+
+    const poolAmountNum = parseFloat(poolAmount);
+    if (isNaN(poolAmountNum) || poolAmountNum < 0) {
+      setError('Please enter a valid pool amount (0 or greater)');
+      return;
+    }
+
     try {
       setListingRepoId(repo.id);
       setError(null);
 
       const [owner, repoName] = repo.full_name.split('/');
 
-      // Call backend to list the repository
+      // Call backend to list the repository with pool amount
       await axios.post(
         'http://localhost:5000/api/repos/list',
         {
@@ -169,6 +200,7 @@ export function Maintainer() {
           language: repo.language,
           stargazers_count: repo.stargazers_count,
           forks_count: repo.forks_count,
+          pool_reward: poolAmountNum
         },
         { withCredentials: true }
       );
@@ -177,12 +209,14 @@ export function Maintainer() {
       setRepositories(prev =>
         prev.map(r =>
           r.id === repo.id
-            ? { ...r, isOpenToContributions: true }
+            ? { ...r, isOpenToContributions: true, poolAmount: poolAmountNum }
             : r
         )
       );
 
-      alert(`${repo.name} is now open for contributions!`);
+      // Close modal and reset
+      setListingModal({ isOpen: false, repo: null, poolAmount: '' });
+      alert(`${repo.name} is now open for contributions with a pool of $${poolAmountNum} USDC!`);
     } catch (error: any) {
       console.error('Error listing repository:', error);
       setError(error.response?.data?.error || 'Failed to list repository');
@@ -296,11 +330,23 @@ export function Maintainer() {
     }
 
     try {
+      // **FILTER OUT THE MAINTAINER** - Only process contributors who are not the maintainer
+      const contributorsExcludingMaintainer = payoutContributors.filter(
+        contributor => contributor.login !== user?.login
+      );
+
+      if (contributorsExcludingMaintainer.length === 0) {
+        setError('No contributors to process payout for (excluding maintainer)');
+        return;
+      }
+
+      console.log(`Processing payout for ${contributorsExcludingMaintainer.length} contributors (excluding maintainer ${user?.login})`);
+
       // Calculate weighted contributions (contributions × weight) for each contributor
       const fundAmountNum = parseFloat(payoutFundAmount);
 
-      // Calculate total weighted contributions: Σ(contributions × weight)
-      const totalWeightedContributions = payoutContributors.reduce((sum, c) =>
+      // Calculate total weighted contributions: Σ(contributions × weight) - ONLY for non-maintainer contributors
+      const totalWeightedContributions = contributorsExcludingMaintainer.reduce((sum, c) =>
         sum + (c.contributions * (c.weight || 0)), 0
       );
 
@@ -310,7 +356,7 @@ export function Maintainer() {
       }
 
       // Calculate individual payouts using: (contributions × weight) / Σ(contributions × weight) × totalPool
-      const nftContributors: NFTContributor[] = payoutContributors.map(contributor => {
+      const nftContributors: NFTContributor[] = contributorsExcludingMaintainer.map(contributor => {
         const weightedContribution = contributor.contributions * (contributor.weight || 0);
         const amount = (weightedContribution / totalWeightedContributions) * fundAmountNum;
         // Round to 2 decimal places
@@ -324,10 +370,11 @@ export function Maintainer() {
         };
       });
 
-      console.log('Processing payout with NFT minting:', {
+      console.log('Processing payout with NFT minting (excluding maintainer):', {
         repo: selectedRepo.name,
         totalAmount: fundAmountNum.toFixed(2),
         totalWeightedContributions,
+        maintainerExcluded: user?.login,
         contributors: nftContributors.map(c => ({
           name: c.name,
           amount: c.amount.toFixed(2),
@@ -336,7 +383,7 @@ export function Maintainer() {
       });
 
       // Call cross-chain NFT minting service
-      console.log('Starting NFT minting for contributors...');
+      console.log('Starting NFT minting for contributors (excluding maintainer)...');
 
       // Import NFT services
       const { callMintCrossChainRewardNFT } = await import('../services/runtransaction');
@@ -344,21 +391,9 @@ export function Maintainer() {
       // Get current MetaMask connected chain as source chain
       let sourceChainId = 11155111; // Default to Sepolia
 
-      // if (window.ethereum) {
-      //   try {
-      //     const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      //     sourceChainId = parseInt(chainId, 16);
-      //     console.log('Connected MetaMask chain ID:', sourceChainId);
-      //   } catch (error) {
-      //     console.error('Error getting MetaMask chain ID:', error);
-      //   }
-      // }
-
       // API function to get user's chainId preference
       const getUserChainId = async (githubUsername: string): Promise<number | null> => {
         try {
-
-
           const response = await axios.post('http://localhost:5000/api/getchain', {
             github_username: githubUsername
           }, { withCredentials: true });
@@ -372,7 +407,7 @@ export function Maintainer() {
         }
       };
 
-      // Process each contributor individually
+      // Process each contributor individually (excluding maintainer)
       for (const contributor of nftContributors) {
         try {
           console.log(`Processing NFT mint for ${contributor.name} (${contributor.address})`);
@@ -385,8 +420,8 @@ export function Maintainer() {
           const targetChainId = userChainId || sourceChainId;
 
           if (targetChainId === sourceChainId) {
-      console.warn(`⚠️ User ${contributor.name} target chain same as source. No bridging needed.`);
-    }
+            console.warn(`⚠️ User ${contributor.name} target chain same as source. No bridging needed.`);
+          }
 
           console.log(`Minting NFT from chain ${sourceChainId} to chain ${targetChainId} for ${contributor.name}`);
 
@@ -408,14 +443,7 @@ export function Maintainer() {
         }
       }
 
-      console.log('🎉 NFT minting process completed for all contributors.');
-
-
-      // TODO: Make API call to record payout in database
-      // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/payout`, {
-      //   contributors: nftContributors,
-      //   totalAmount: fundAmountNum
-      // }, { withCredentials: true });
+      console.log('🎉 NFT minting process completed for all contributors (maintainer excluded).');
 
       // Update repository pool amount
       setRepositories(prev =>
@@ -426,7 +454,7 @@ export function Maintainer() {
         )
       );
 
-      alert('Payout and NFT minting completed successfully!');
+      alert(`Payout and NFT minting completed successfully for ${nftContributors.length} contributors (maintainer excluded)!`);
       setShowPayoutModal(false);
       setPayoutContributors([]);
       setPayoutFundAmount('');
@@ -668,8 +696,8 @@ export function Maintainer() {
 
                                 <div className="flex items-center justify-between pt-3 border-t border-gray-800">
                                   <div>
-                                    <div className="text-sm text-gray-400">
-                                      Pool: ${repo.poolAmount?.toLocaleString() || 0} USDC
+                                    <div className="text-sm font-semibold text-gray-300">
+                                      Pool: <span className="text-green-400">${repo.poolAmount?.toLocaleString() || 0}</span> USDC
                                     </div>
                                     <div className="text-xs text-gray-500">
                                       {repo.stats.open_issues_count} open issues
@@ -720,7 +748,7 @@ export function Maintainer() {
                                       size="sm"
                                       variant="secondary"
                                       onClick={() => handlePayout(repo)}
-                                      disabled={loadingRepoId === repo.id}
+                                      disabled={loadingRepoId === repo.id || !repo.isOpenToContributions}
                                     >
                                       {loadingRepoId === repo.id ? 'Loading...' : 'Payout'}
                                     </Button>
@@ -797,8 +825,86 @@ export function Maintainer() {
         onFundAmountChange={setPayoutFundAmount}
         onWeightChange={handleWeightChange}
         onConfirmPayout={handleConfirmPayout}
+        maintainerLogin={user?.login} // Add this prop
       />
 
+      {/* Listing Modal */}
+      {listingModal.isOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full"
+          >
+            <h3 className="text-xl font-bold mb-4">
+              List Repository for Contributions
+            </h3>
+
+            <div className="mb-4">
+              <p className="text-gray-400 mb-2">
+                Repository: <span className="text-white font-semibold">{listingModal.repo?.name}</span>
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm text-gray-400 mb-2">
+                Initial Pool Reward (USDC)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Enter amount (e.g., 1000)"
+                value={listingModal.poolAmount}
+                onChange={(e) =>
+                  setListingModal(prev => ({
+                    ...prev,
+                    poolAmount: e.target.value
+                  }))
+                }
+                className="w-full bg-black border border-gray-700 rounded px-4 py-2 text-white focus:outline-none focus:border-white"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                This amount will be available for contributor payouts
+              </p>
+            </div>
+
+            {error && (
+              <div className="bg-red-900/50 border border-red-700 rounded p-3 mb-4">
+                <p className="text-red-300 text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setListingModal({ isOpen: false, repo: null, poolAmount: '' });
+                  setError(null);
+                }}
+                disabled={listingRepoId !== null}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmListing}
+                disabled={listingRepoId !== null}
+                className="flex-1"
+              >
+                {listingRepoId !== null ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Listing...
+                  </>
+                ) : (
+                  'Confirm & List'
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

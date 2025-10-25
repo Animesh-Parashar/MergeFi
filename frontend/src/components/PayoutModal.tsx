@@ -29,6 +29,7 @@ interface PayoutModalProps {
     onFundAmountChange: (amount: string) => void;
     onWeightChange: (contributorId: number, weight: number) => void;
     onConfirmPayout: () => void;
+    maintainerLogin?: string; // Add this to identify maintainer
 }
 
 const PayoutModal: React.FC<PayoutModalProps> = ({
@@ -41,18 +42,29 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
     onFundAmountChange,
     onWeightChange,
     onConfirmPayout,
+    maintainerLogin,
 }) => {
     const handleClose = () => {
         onClose();
     };
 
-    // Calculate payout amount for each contributor
-    const calculatePayoutAmount = (contributor: Contributor): number => {
-        const fundAmountNum = parseFloat(fundAmount) || 0;
-        if (fundAmountNum === 0 || contributors.length === 0) return 0;
+    // Filter out maintainer from calculations
+    const contributorsExcludingMaintainer = contributors.filter(
+        contributor => contributor.login !== maintainerLogin
+    );
 
-        // Calculate total weighted contributions: Σ(contributions × weight)
-        const totalWeightedContributions = contributors.reduce((sum, c) =>
+    // Calculate payout amount for each contributor (excluding maintainer)
+    const calculatePayoutAmount = (contributor: Contributor): number => {
+        // If this is the maintainer, return 0
+        if (contributor.login === maintainerLogin) {
+            return 0;
+        }
+
+        const fundAmountNum = parseFloat(fundAmount) || 0;
+        if (fundAmountNum === 0 || contributorsExcludingMaintainer.length === 0) return 0;
+
+        // Calculate total weighted contributions EXCLUDING maintainer
+        const totalWeightedContributions = contributorsExcludingMaintainer.reduce((sum, c) =>
             sum + (c.contributions * (c.weight || 0)), 0
         );
 
@@ -63,9 +75,15 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
         return (weightedContribution / totalWeightedContributions) * fundAmountNum;
     };
 
-    // Calculate percentage for each contributor
+    // Calculate percentage for each contributor (excluding maintainer)
     const calculatePayoutPercentage = (contributor: Contributor): number => {
-        const totalWeightedContributions = contributors.reduce((sum, c) =>
+        // If this is the maintainer, return 0
+        if (contributor.login === maintainerLogin) {
+            return 0;
+        }
+
+        // Calculate total weighted contributions EXCLUDING maintainer
+        const totalWeightedContributions = contributorsExcludingMaintainer.reduce((sum, c) =>
             sum + (c.contributions * (c.weight || 0)), 0
         );
 
@@ -88,6 +106,11 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
                     </div>
                 )}
 
+                {/* Add info banner */}
+                <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-3 rounded text-sm">
+                    ℹ️ Maintainer (@{maintainerLogin}) will be excluded from payouts
+                </div>
+
                 <div>
                     <h3 className="text-lg font-semibold text-white mb-4">Contributors</h3>
                     <div className="space-y-3">
@@ -95,9 +118,16 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
                             contributors.map((contributor) => {
                                 const payoutAmount = calculatePayoutAmount(contributor);
                                 const payoutPercentage = calculatePayoutPercentage(contributor);
+                                const isMaintainer = contributor.login === maintainerLogin;
 
                                 return (
-                                    <div key={contributor.id} className="bg-gray-800 p-4 rounded border border-gray-700">
+                                    <div
+                                        key={contributor.id}
+                                        className={`bg-gray-800 p-4 rounded border ${isMaintainer
+                                            ? 'border-yellow-500/30 opacity-60'
+                                            : 'border-gray-700'
+                                            }`}
+                                    >
                                         <div className="space-y-3">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
@@ -107,7 +137,14 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
                                                         className="w-8 h-8 rounded-full"
                                                     />
                                                     <div>
-                                                        <div className="text-white font-medium">{contributor.name}</div>
+                                                        <div className="text-white font-medium flex items-center gap-2">
+                                                            {contributor.name}
+                                                            {isMaintainer && (
+                                                                <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">
+                                                                    Maintainer (Excluded)
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <div className="text-gray-400 text-sm">@{contributor.login}</div>
                                                         <div className="text-gray-500 text-xs">{contributor.contributions} contributions</div>
                                                     </div>
@@ -115,21 +152,26 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
                                                 <div className="flex items-center gap-2">
                                                     <label className="text-gray-400 text-sm">Weight:</label>
                                                     <select
-                                                        value={contributor.weight || 5}
+                                                        value={isMaintainer ? 0 : (contributor.weight || 5)}
                                                         onChange={(e) => onWeightChange(contributor.id, parseInt(e.target.value))}
-                                                        className="bg-gray-900 border border-gray-600 text-white px-2 py-1 rounded text-sm w-16"
+                                                        disabled={isMaintainer}
+                                                        className="bg-gray-900 border border-gray-600 text-white px-2 py-1 rounded text-sm w-16 disabled:opacity-50"
                                                     >
-                                                        {[...Array(10)].map((_, i) => (
-                                                            <option key={i + 1} value={i + 1}>
-                                                                {i + 1}
-                                                            </option>
-                                                        ))}
+                                                        {isMaintainer ? (
+                                                            <option value={0}>0</option>
+                                                        ) : (
+                                                            [...Array(10)].map((_, i) => (
+                                                                <option key={i + 1} value={i + 1}>
+                                                                    {i + 1}
+                                                                </option>
+                                                            ))
+                                                        )}
                                                     </select>
                                                 </div>
                                             </div>
 
                                             {/* Payout calculation display */}
-                                            {fundAmount && parseFloat(fundAmount) > 0 && (
+                                            {fundAmount && parseFloat(fundAmount) > 0 && !isMaintainer && (
                                                 <div className="flex items-center justify-between pt-2 border-t border-gray-700">
                                                     <div className="text-sm text-gray-400">
                                                         Weighted Score: {contributor.contributions} × {contributor.weight || 0} = {contributor.contributions * (contributor.weight || 0)}
@@ -142,6 +184,11 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
                                                             {payoutPercentage.toFixed(2)}% of total
                                                         </div>
                                                     </div>
+                                                </div>
+                                            )}
+                                            {isMaintainer && (
+                                                <div className="pt-2 border-t border-gray-700 text-sm text-yellow-400">
+                                                    ⚠️ Will not receive payout (maintainer)
                                                 </div>
                                             )}
                                         </div>
@@ -182,9 +229,13 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
                                 <span className="text-white font-medium">{contributors.length}</span>
                             </div>
                             <div className="flex justify-between">
+                                <span className="text-gray-400">Eligible for Payout:</span>
+                                <span className="text-white font-medium">{contributorsExcludingMaintainer.length}</span>
+                            </div>
+                            <div className="flex justify-between">
                                 <span className="text-gray-400">Total Weighted Score:</span>
                                 <span className="text-white font-medium">
-                                    {contributors.reduce((sum, c) => sum + (c.contributions * (c.weight || 0)), 0)}
+                                    {contributorsExcludingMaintainer.reduce((sum, c) => sum + (c.contributions * (c.weight || 0)), 0)}
                                 </span>
                             </div>
                             <div className="flex justify-between border-t border-gray-700 pt-2 mt-2">
@@ -193,6 +244,9 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
                             </div>
                             <div className="text-xs text-gray-500 mt-2">
                                 Formula: Payout = (Contributions × Weight) / Σ(Contributions × Weight) × Total Pool
+                            </div>
+                            <div className="text-xs text-yellow-400 mt-1">
+                                * Maintainer excluded from payout distribution
                             </div>
                         </div>
                     </div>

@@ -6,6 +6,7 @@ import {
     BridgeAndExecuteSimulationResult,
     TOKEN_METADATA
 } from '@avail-project/nexus-core';
+import axios from 'axios';
 import { parseUnits, ethers, BrowserProvider, Contract } from 'ethers';
 
 // Supported chain IDs for cross-chain NFT minting
@@ -219,13 +220,19 @@ export const mintCrossChainRewardNFT = async (
 
     const currentChainId = await ethProvider.request({ method: 'eth_chainId' });
     const currentChainIdDecimal = parseInt(currentChainId, 16);
+    const sourceChainId = currentChainIdDecimal;
 
     console.log('=== Cross-Chain NFT Minting ===');
-    console.log('Current Chain:', getChainName(currentChainIdDecimal));
+    console.log('Source Chain:', getChainName(sourceChainId));
     console.log('Destination Chain:', getChainName(toChainId));
     console.log('Amount:', amount, 'USDC');
     console.log('Contributor:', walletAddress);
     console.log('===============================');
+
+    console.log('\n📋 Process Overview:');
+    console.log('1. Check and set USDC allowance on source chain for Nexus bridge');
+    console.log('2. Execute bridge transaction (bridges USDC + mints NFT on destination)');
+    console.log('You will be prompted for wallet confirmations.\n');
 
     // Initialize Nexus SDK
     const sdk = new NexusSDK({ network: 'testnet' });
@@ -233,23 +240,39 @@ export const mintCrossChainRewardNFT = async (
 
     const actualSourceChains = [currentChainIdDecimal];
 
-    // STEP 1: Manually approve USDC for the contract on destination chain
+    // STEP 1: Check current allowance on source chain
+    console.log('\n🔍 Checking USDC allowance on source chain...');
     try {
-        console.log('\n🔐 Step 1: Approving USDC for contract on destination chain...');
-        const approvalTxHash = await approveUSDCForContract(
-            ethProvider,
-            contractaddress_mapping[toChainId],
-            amount,
-            toChainId
-        );
-        console.log('Approval Transaction:', approvalTxHash);
-    } catch (approvalError: any) {
-        console.error('❌ USDC Approval failed:', approvalError);
-        throw new Error(`Failed to approve USDC: ${approvalError.message}`);
+        const allowances = await sdk.getAllowance(sourceChainId, ['USDC']);
+        const currentAllowance = allowances.find(a => a.token === 'USDC');
+
+        console.log('Current allowance:', currentAllowance?.allowance || '0');
+
+        // Convert amount to BigInt (USDC has 6 decimals)
+        const amountWei = parseUnits(amount, 6);
+
+        // Check if we need to set allowance
+        const needsAllowance = !currentAllowance ||
+            BigInt(currentAllowance.allowance) < amountWei;
+
+        if (needsAllowance) {
+            console.log('📝 Setting USDC allowance on source chain...');
+            console.log(`Approving ${amount} USDC for Nexus bridge...`);
+
+            // Set allowance for the bridge contract on source chain
+            await sdk.setAllowance(sourceChainId, ['USDC'], amountWei);
+
+            console.log('✅ USDC allowance set successfully!');
+        } else {
+            console.log('✅ Sufficient allowance already exists');
+        }
+    } catch (allowanceError: any) {
+        console.error('❌ Failed to check/set allowance:', allowanceError);
+        throw new Error(`Allowance setup failed: ${allowanceError.message}`);
     }
 
-    // STEP 2: Execute bridge and contract call
-    console.log('\n🌉 Step 2: Executing bridge and NFT minting...');
+    // STEP 2: Execute bridge and mint
+    console.log('\n🌉 Executing bridge and NFT minting...');
     const bridgeAndExecuteResult: BridgeAndExecuteResult = await sdk.bridgeAndExecute({
         token: 'USDC',
         amount: amount,
@@ -278,7 +301,6 @@ export const mintCrossChainRewardNFT = async (
                     ],
                 };
             },
-            // ✅ No tokenApproval here - we did it manually above
         },
         waitForReceipt: true,
     } as BridgeAndExecuteParams);
@@ -286,10 +308,70 @@ export const mintCrossChainRewardNFT = async (
     console.log('✅ Cross-chain NFT minting completed!');
     console.log('Transaction result:', bridgeAndExecuteResult);
 
+    // STEP 3: Store transaction in database
+    try {
+        const txHash = bridgeAndExecuteResult.executeTransactionHash 
+            // bridgeAndExecuteResult.bridgeTransactionHash ||
+            // bridgeAndExecuteResult.approvalTransactionHash;
+        const toChainIdDecimal = bridgeAndExecuteResult.toChainId;
+        if (txHash) {
+            await storeTransactionInDB(txHash, currentChainIdDecimal, toChainIdDecimal);
+        } else {
+            console.warn('⚠️ No transaction hash found in result');
+        }
+    } catch (dbError) {
+        console.error('❌ Database operation failed:', dbError);
+    }
+
     return bridgeAndExecuteResult;
 };
 
+async function storeTransactionInDB(
+    txHash: string,
+    fromChainId: number,
+    toChainId: number
+): Promise<void> {
+    try {
+        console.log('💾 Storing transaction in database...');
 
+        // const response = await fetch('http://localhost:5000/api/transactions/saveTx', {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //     body: JSON.stringify({
+        //         tx_hash: txHash,
+        //         from_chain_id: fromChainId,
+        //         to_chain_id: toChainId,
+        //     }),
+        // });
+        console.log({ tx_hash: txHash,
+            from_chain_id: fromChainId,
+            to_chain_id: toChainId,});
+        const response = await axios.post('http://localhost:5000/api/transactions/saveTx', {
+            tx_hash: txHash,
+            from_chain_id: fromChainId,
+            to_chain_id: toChainId,
+        }, {
+            withCredentials: true, // Add credentials if needed
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const result =  response.data;
+        console.log('Response from server:', result);
+
+        if ( result.message !== 'Transaction stored successfully') {
+            throw new Error(result.error || 'Failed to store transaction');
+        }
+
+        //console.log('✅ Transaction stored in database:', result.transaction.id);
+    } catch (error) {
+        console.error('❌ Failed to store transaction in database:', error);
+        // Don't throw - transaction was successful even if DB storage failed
+    }
+}
 
 export const getChainName = (chainId: number): string => {
     return CHAIN_NAMES[chainId] || `Chain ${chainId}`;
@@ -298,3 +380,124 @@ export const getChainName = (chainId: number): string => {
 export const isSupportedChain = (chainId: number): boolean => {
     return Object.values(SUPPORTED_CHAIN_IDS).includes(chainId as any);
 };
+
+// Network switching helper function with user confirmation
+export async function switchToNetwork(chainId: number, reason?: string): Promise<void> {
+    const ethereum = window.ethereum as any;
+    if (!ethereum) {
+        throw new Error('MetaMask not found');
+    }
+
+    // Check if already on the correct network
+    const currentChainId = await ethereum.request({ method: 'eth_chainId' });
+    const currentChainIdDecimal = parseInt(currentChainId, 16);
+
+    if (currentChainIdDecimal === chainId) {
+        console.log(`✅ Already on ${getChainName(chainId)}`);
+        return;
+    }
+
+    const reasonText = reason ? `\n\nReason: ${reason}` : '';
+    const confirmed = confirm(
+        `🔄 Network Switch Required\n\n` +
+        `Please switch from ${getChainName(currentChainIdDecimal)} to ${getChainName(chainId)}${reasonText}\n\n` +
+        `Click OK to proceed with the network switch.`
+    );
+
+    if (!confirmed) {
+        throw new Error('Network switch cancelled by user');
+    }
+
+    const chainIdHex = `0x${chainId.toString(16)}`;
+    console.log(`🔄 Switching to ${getChainName(chainId)} (${chainIdHex})...`);
+
+    try {
+        await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: chainIdHex }],
+        });
+        console.log(`✅ Successfully switched to ${getChainName(chainId)}`);
+    } catch (switchError: any) {
+        // If the chain is not added to MetaMask, add it
+        if (switchError.code === 4902) {
+            console.log(`Adding ${getChainName(chainId)} to MetaMask...`);
+            const chainConfig = getChainConfig(chainId);
+            await ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [chainConfig],
+            });
+            console.log(`✅ Added and switched to ${getChainName(chainId)}`);
+        } else if (switchError.code === 4001) {
+            throw new Error('Network switch rejected by user');
+        } else {
+            throw new Error(`Failed to switch to ${getChainName(chainId)}: ${switchError.message}`);
+        }
+    }
+
+    // Wait a bit for the switch to complete
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Verify the switch was successful
+    const newChainId = await ethereum.request({ method: 'eth_chainId' });
+    const newChainIdDecimal = parseInt(newChainId, 16);
+
+    if (newChainIdDecimal !== chainId) {
+        throw new Error(`Network switch failed. Expected ${getChainName(chainId)}, but got ${getChainName(newChainIdDecimal)}`);
+    }
+}
+
+// Get chain configuration for adding to MetaMask
+function getChainConfig(chainId: number) {
+    const configs: Record<number, any> = {
+        11155111: {
+            chainId: '0xaa36a7',
+            chainName: 'Sepolia',
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://sepolia.infura.io/v3/'],
+            blockExplorerUrls: ['https://sepolia.etherscan.io/'],
+        },
+        11155420: {
+            chainId: '0xaa37dc',
+            chainName: 'Optimism Sepolia',
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://sepolia.optimism.io'],
+            blockExplorerUrls: ['https://sepolia-optimism.etherscan.io/'],
+        },
+        421614: {
+            chainId: '0x66eee',
+            chainName: 'Arbitrum Sepolia',
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
+            blockExplorerUrls: ['https://sepolia.arbiscan.io/'],
+        },
+        84532: {
+            chainId: '0x14a34',
+            chainName: 'Base Sepolia',
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://sepolia.base.org'],
+            blockExplorerUrls: ['https://sepolia-explorer.base.org/'],
+        },
+        80002: {
+            chainId: '0x13882',
+            chainName: 'Polygon Amoy',
+            nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+            rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+            blockExplorerUrls: ['https://amoy.polygonscan.com/'],
+        },
+        10143: {
+            chainId: '0x279f',
+            chainName: 'Monad Testnet',
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
+            blockExplorerUrls: ['https://sepolia.arbiscan.io/'],
+        },
+    };
+
+    return configs[chainId] || {
+        chainId: `0x${chainId.toString(16)}`,
+        chainName: `Chain ${chainId}`,
+        nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+        rpcUrls: [''],
+        blockExplorerUrls: [''],
+    };
+}
