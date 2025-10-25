@@ -170,6 +170,7 @@ export const listRepository = async (req, res) => {
       language,
       stargazers_count,
       forks_count,
+      pool_reward
     } = req.body;
 
     if (!github_repo_id || !owner || !repo) {
@@ -203,6 +204,7 @@ export const listRepository = async (req, res) => {
           stargazers_count,
           forks_count,
           is_open: true,
+          pool_reward,
           listed_at: new Date().toISOString(),
         },
       ])

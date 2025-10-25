@@ -286,10 +286,59 @@ export const mintCrossChainRewardNFT = async (
     console.log('✅ Cross-chain NFT minting completed!');
     console.log('Transaction result:', bridgeAndExecuteResult);
 
+     // STEP 3: Store transaction in database
+    try {
+        // Extract transaction hash from result
+        const txHash = bridgeAndExecuteResult.executeTransactionHash || 
+                       bridgeAndExecuteResult.bridgeTransactionHash || 
+                       bridgeAndExecuteResult.approvalTransactionHash;
+        const toChainIdDecimal = bridgeAndExecuteResult.toChainId;
+        if (txHash) {
+            // Store initial transaction
+            await storeTransactionInDB(txHash, currentChainIdDecimal, toChainIdDecimal);
+        } else {
+            console.warn('⚠️ No transaction hash found in result');
+        }
+    } catch (dbError) {
+        console.error('❌ Database operation failed:', dbError);
+        // Don't throw - transaction was successful
+    }
+
     return bridgeAndExecuteResult;
 };
 
+async function storeTransactionInDB(
+    txHash: string,
+    fromChainId: number,
+    toChainId: number
+): Promise<void> {
+    try {
+        console.log('💾 Storing transaction in database...');
 
+        const response = await fetch('http://localhost:5000/api/transactions/saveTx', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                tx_hash: txHash,
+                from_chain_id: fromChainId,
+                to_chain_id: toChainId,
+            }),
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to store transaction');
+        }
+
+        console.log('✅ Transaction stored in database:', result.transaction.id);
+    } catch (error) {
+        console.error('❌ Failed to store transaction in database:', error);
+        // Don't throw - transaction was successful even if DB storage failed
+    }
+}
 
 export const getChainName = (chainId: number): string => {
     return CHAIN_NAMES[chainId] || `Chain ${chainId}`;
