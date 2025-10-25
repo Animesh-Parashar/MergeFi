@@ -461,6 +461,7 @@ export const getPRAnalysisData = async (req, res) => {
           { headers: { Authorization: `Bearer ${github_token}` } }
         );
         issueBody = issueRes.data.body;
+        console.log("Successfully detched the issues", issueBody);
       } catch (issueError) {
         console.warn(
           `Could not fetch linked issue #${issueNumber}:`,
@@ -485,6 +486,7 @@ export const getPRAnalysisData = async (req, res) => {
 export const getGeminiAnalysis = async (req, res) => {
   const { prBody, diffContent, issueBody } = req.body;
   const geminiKey = process.env.GEMINI_API_KEY;
+  console.log("issue",issueBody)
 
   if (!geminiKey) {
     return res.status(500).json({ error: "Gemini API key is not configured" });
@@ -498,6 +500,7 @@ export const getGeminiAnalysis = async (req, res) => {
 Role: You are an expert code reviewer and project manager for an open-source project. Your task is to analyze a contribution and suggest a fair reward.
 
 [THE PROBLEM: GITHUB ISSUE]
+
 ${issueBody || "No linked issue was provided."}
 
 [THE SOLUTION: CONTRIBUTOR'S PULL REQUEST]
@@ -507,17 +510,26 @@ Code Changes (.diff):
 ${diffContent}
 
 [YOUR TASK]
-1. Analysis: Does the code in "Code Changes" solve the problem?
-2. Quality: Rate quality (1-10).
-3. Complexity: (Typo, Small Bug, Major Bug, New Feature).
-4. Suggest reward in USDC:
-   * Typo: $1 - $5
-   * Small Bug: $5 - $25
-   * Major Bug: $25 - $100
-   * New Feature: $100 - $500
+ Analyze the contribution and provide your response ONLY in a valid JSON format, using the following keys:
+ 
+ 1.  **"solves_issue"**: (Boolean) Does the code in "Code Changes" successfully and completely solve the problem in "THE PROBLEM"?
+ 2.  **"analysis_notes"**: (String) Your detailed analysis of the PR, explaining your reasoning.
+ 3.  **"quality_rating"**: (Number) A rating from 1-10 for the quality of the solution (1=poor, 10=excellent).
+ 4.  **"complexity"**: (String) Categorize the complexity. Must be one of: "Typo", "Small Bug", "Major Bug", "New Feature".
+ 5.  **"suggested_payout_usdc"**: (Number) The suggested reward amount in USDC, based on this scale:
+ * Typo: 1-5
+ * Small Bug: 5-25
+ * Major Bug: 25-100
+ * New Feature: 100-500
 
-Return valid JSON only.
-`;
+ Example of a valid response:
+ {
+ "solves_issue": true,
+ "analysis_notes": "The PR correctly fixes the off-by-one error and adds a unit test.",
+ "quality_rating": 9,
+ "complexity": "Small Bug",
+ "suggested_payout_usdc": 25
+ } `;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
