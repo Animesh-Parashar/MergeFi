@@ -1,8 +1,8 @@
 
 
-# MergiFi — AI-Po* **Cross-Chain Rewards**: Built on **Avail** for seamless cross-chain transactions.
+# MergiFi — AI-Powered **Cross-Chain Rewards**: Built on **Avail** for seamless cross-chain transactions.
 * **Transparency**: All transactions are tracked and verified on-chain.
-* Enables smooth USDC transfers to contributors across supported networks.d Reward Pools for Open Source Contributions
+* Enables smooth USDC transfers to contributors across supported networks. Reward Pools for Open Source Contributions
 
 **MergeFi** is a decentralized platform that incentivizes open-source contributions by automating rewards for merged pull requests on GitHub. 
 
@@ -47,7 +47,7 @@ Contributors are rewarded not only financially, they also earn **NFT badges** fo
 Maintainer Repo
     └── PR-Pool Contract (per repo)
           ├── AI Pricing Engine
-          ├── Reward Pool (PYUSD)
+          ├── Reward Pool (USDC)
           ├── Avail Bridge
           ├── NFT Badge Minting
           └── Blockscout Integration
@@ -73,10 +73,9 @@ Maintainer Repo
 | ------------------- | ------------------------------ |
 | Smart Contracts     | Solidity, Hardhat              |
 | Cross-Chain Layer   | Avail                          |
-| Token Standard      | ERC-20 (PYUSD)                 |
 | NFTs                | ERC-721 Badges                 |
 | Frontend            | React / Next.js                |
-| AI Engine           | Python (OpenAI / custom model) |
+| AI Engine           | Gemini-API                     |
 | Blockchain Explorer | Blockscout                     |
 | Backend             | Node.js + Express              |
 | Storage             | IPFS / Pinata (for metadata)   |
@@ -142,8 +141,8 @@ We welcome contributions!
 
 | Role         | Token      | Purpose                                |
 | ------------ | ---------- | -------------------------------------- |
-| Maintainers  | PYUSD      | Deposit to fund reward pools           |
-| Contributors | PYUSD      | Receive payment for merged PRs         |
+| Maintainers  | USDC       | Deposit to fund reward pools           |
+| Contributors | USDC       | Receive payment for merged PRs         |
 | Contributors | NFT Badges | Earn collectible proof of contribution |
 
 ---
@@ -156,11 +155,11 @@ This project is licensed under the **MIT License** — see [LICENSE](LICENSE) fo
 
 ## 🌟 Roadmap
 
-* [ ] Add GitHub OAuth integration for maintainer verification
-* [ ] Expand AI models for PR valuation
-* [ ] Support multiple stablecoins (USDC, DAI, etc.)
-* [ ] Launch public dashboard for project rankings
-* [ ] Gamify contributor badges with rarity tiers
+* [x] Add GitHub OAuth integration for maintainer verification
+* [x] Expand AI models for PR valuation
+* [x] Support multiple stablecoins (USDC, DAI, etc.)
+* [x] Launch public dashboard for project rankings
+* [x] Gamify contributor badges with rarity tiers
 
 ---
 
