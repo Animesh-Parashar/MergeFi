@@ -120,9 +120,9 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
       );
 
       setAnalysisResult(geminiRes.data);
-      console.log("Analysis Result:", geminiRes.data);  
+      console.log("Analysis Result:", geminiRes.data);
 
-    
+
     } catch (err: any) {
       console.error("Error during analysis:", err);
       setError(err.response?.data?.error || "Failed to analyze PR");
@@ -130,7 +130,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
       setLoadingAnalysis(false);
     }
   };
-  
+
 
   // Helper function to format dates
   const formatDate = (dateString: string) => {
@@ -278,15 +278,15 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                         </p>
                         <p>
                           <strong>Complexity:</strong>{" "}
-                          {analysisResult.complexity}
+                          {analysisResult.complexity || "N/A"}
                         </p>
                         <p>
                           <strong>Quality Rating:</strong>{" "}
-                          {analysisResult.quality_rating} / 10
+                          {analysisResult.quality_rating ?? 0} / 10
                         </p>
                         <p>
                           <strong>Notes:</strong>{" "}
-                          {analysisResult.analysis_notes}
+                          {analysisResult.analysis_notes || "No notes available"}
                         </p>
                       </div>
                       <div className="pt-4 border-t border-gray-700">
@@ -294,11 +294,14 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                           Suggested Payout:
                         </p>
                         <p className="text-3xl font-bold text-green-400">
-                          ${analysisResult.suggested_payout_usdc.toFixed(2)}{" "}
+                          ${(analysisResult.suggested_payout_usdc ?? 0).toFixed(2)}{" "}
                           <span className="text-lg">USDC</span>
                         </p>
                       </div>
-                      <button className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold">
+                      <button
+                        className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={(analysisResult.suggested_payout_usdc ?? 0) <= 0}
+                      >
                         Add to Payout
                       </button>
                     </div>
