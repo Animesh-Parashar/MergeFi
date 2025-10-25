@@ -437,6 +437,7 @@ export const getPRAnalysisData = async (req, res) => {
     );
 
     const prBody = prRes.data.body || "";
+    console.log("--- PR BODY CONTENT ---", prBody);
 
     const diffRes = await axios.get(
       `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
@@ -462,7 +463,7 @@ export const getPRAnalysisData = async (req, res) => {
           { headers: { Authorization: `Bearer ${github_token}` } }
         );
         issueBody = issueRes.data.body;
-        console.log("Successfully detched the issues", issueBody);
+        console.log("Successfully fetched the issues", issueBody);
       } catch (issueError) {
         console.warn(
           `Could not fetch linked issue #${issueNumber}:`,
@@ -498,10 +499,9 @@ export const getGeminiAnalysis = async (req, res) => {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
     const prompt = `
-Role: You are an expert code reviewer and project manager for an open-source project. Your task is to analyze a contribution and suggest a fair reward.
+Role: You are an expert code reviewer and project manager for an open-source project. Your task is to analyze a contribution and assign it a "contribution weight."
 
 [THE PROBLEM: GITHUB ISSUE]
-
 ${issueBody || "No linked issue was provided."}
 
 [THE SOLUTION: CONTRIBUTOR'S PULL REQUEST]
@@ -511,26 +511,22 @@ Code Changes (.diff):
 ${diffContent}
 
 [YOUR TASK]
- Analyze the contribution and provide your response ONLY in a valid JSON format, using the following keys:
- 
- 1.  **"solves_issue"**: (Boolean) Does the code in "Code Changes" successfully and completely solve the problem in "THE PROBLEM"?
- 2.  **"analysis_notes"**: (String) Your detailed analysis of the PR, explaining your reasoning.
- 3.  **"quality_rating"**: (Number) A rating from 1-10 for the quality of the solution (1=poor, 10=excellent).
- 4.  **"complexity"**: (String) Categorize the complexity. Must be one of: "Typo", "Small Bug", "Major Bug", "New Feature".
- 5.  **"suggested_payout_usdc"**: (Number) The suggested reward amount in USDC, based on this scale:
- * Typo: 1-5
- * Small Bug: 5-25
- * Major Bug: 25-100
- * New Feature: 100-500
+Analyze the contribution and provide your response ONLY in a valid JSON format, using the following keys:
 
- Example of a valid response:
- {
- "solves_issue": true,
- "analysis_notes": "The PR correctly fixes the off-by-one error and adds a unit test.",
- "quality_rating": 9,
- "complexity": "Small Bug",
- "suggested_payout_usdc": 25
- } `;
+1. **"solves_issue"**: (Boolean) Does the code in "Code Changes" successfully and completely solve the problem in "THE PROBLEM"?
+2. **"analysis_notes"**: (String) Your detailed analysis of the PR, explaining your reasoning.
+3. **"quality_rating"**: (Number) A rating from 1-10 for the quality of the solution (1=poor, 10=excellent).
+4. **"complexity"**: (String) Categorize the complexity. Must be one of: "Typo", "Small Bug", "Major Bug", "New Feature".
+5. **"contribution_weight"**: (Number) Assign a final "contribution weight" from 1 (trivial) to 10 (highly impactful). Base this on a combination of complexity, quality, and overall importance to the project.
+
+Example of a valid response:
+{
+"solves_issue": true,
+"analysis_notes": "The PR correctly fixes the off-by-one error and adds a unit test.",
+"quality_rating": 9,
+"complexity": "Small Bug",
+"contribution_weight": 7
+} `;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -543,7 +539,7 @@ ${diffContent}
       analysis_notes: jsonResponse.analysis_notes || jsonResponse.analysis || "No analysis provided",
       quality_rating: jsonResponse.quality_rating ?? jsonResponse.quality ?? 0,
       complexity: jsonResponse.complexity || "Unknown",
-      suggested_payout_usdc: jsonResponse.suggested_payout_usdc ?? jsonResponse.reward ?? 0
+      contribution_weight: jsonResponse.contribution_weight ?? jsonResponse.reward ?? 0
     };
 
     console.log("Gemini API response:", analysisResult);
@@ -551,5 +547,81 @@ ${diffContent}
   } catch (err) {
     console.error("Error calling Gemini API:", err);
     res.status(500).json({ error: "Failed to get analysis from AI" });
+  }
+};
+
+export const calculateContributorWeight = async (req, res) => {
+  const { owner, repo, username, totalContributions } = req.body;
+  const github_token = req.cookies?.github_token;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (!github_token || !geminiKey) {
+    return res.status(401).json({ error: "Unauthorized or AI key not configured" });
+  }
+
+  try {
+    // === 1. Get a summary of all their merged PRs ===
+    const query = `repo:${owner}/${repo} type:pr is:merged author:${username}`;
+    const searchRes = await axios.get(`https://api.github.com/search/issues`, {
+      headers: { Authorization: `Bearer ${github_token}` },
+      params: { q: query, per_page: 20, sort: "created", order: "desc" }, // Get 20 most recent
+    });
+
+    const prs = searchRes.data.items || [];
+    let prSummary = "No merged PRs found.";
+
+    if (prs.length > 0) {
+      prSummary = prs
+        .map((pr) => `- PR #${pr.number}: ${pr.title}`)
+        .join("\n");
+    }
+
+    // === 2. Initialize Gemini ===
+    const genAI = new GoogleGenerativeAI(geminiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+
+    // === 3. Create the Holistic Prompt ===
+    const prompt = `
+Role: You are an expert project manager. Your task is to assign a "contribution weight" to an open-source contributor based on their body of work.
+
+[CONTRIBUTOR DATA]
+Username: @${username}
+Total Commits (from GitHub): ${totalContributions}
+Recent Merged Pull Requests:
+${prSummary}
+
+[YOUR TASK]
+Based *only* on the data provided, assign a single, holistic "contribution_weight" from 1 (trivial, e.g., a few typos) to 10 (highly impactful, e.g., multiple complex features or bugfixes).
+
+- A "1" should be for very minor contributions, like a single typo fix.
+- A "5" should be for a solid, average contributor (e.g., fixed a small bug, completed a small feature).
+- A "10" should be for a core contributor who has clearly shipped significant work.
+
+Provide your answer ONLY in a valid JSON format, using the following key:
+
+{
+  "contribution_weight": <number 1-10>
+}
+`;
+
+    // === 4. Call Gemini AI and send response ===
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().replace(/```json/g, "").replace(/```/g, "");
+
+    let jsonResponse;
+    try {
+      jsonResponse = JSON.parse(text);
+    } catch {
+      jsonResponse = { contribution_weight: 5 }; // fallback default
+    }
+
+    // Ensure weight is within 1–10
+    let weight = Math.round(jsonResponse.contribution_weight || 5);
+    weight = Math.max(1, Math.min(10, weight));
+
+    res.json({ contribution_weight: weight });
+  } catch (err) {
+    console.error("Error calculating holistic weight:", err.message);
+    res.status(500).json({ error: "Failed to get AI weight" });
   }
 };

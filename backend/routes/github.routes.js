@@ -12,7 +12,8 @@ import {
   getContributorCommits,
   getContributorMergedPRs,
   getPRAnalysisData,
-  getGeminiAnalysis
+  getGeminiAnalysis,
+  calculateContributorWeight
 } from '../controllers/maintainer.controller.js';
 import {
   listRepository,
@@ -38,6 +39,7 @@ router.get('/maintainer/:owner/:repo/:username/commits', getContributorCommits);
 router.get('/maintainer/:owner/:repo/:username/merged-prs', getContributorMergedPRs);
 router.get('/maintainer/:owner/:repo/pr-data/:prNumber', getPRAnalysisData);
 router.post('/ai/analyze-pr', getGeminiAnalysis);
+router.post('/ai/calculate-contributor-weight', calculateContributorWeight); 
 
 
 // Repository listing routes

@@ -38,7 +38,7 @@ interface AnalysisResult {
   analysis_notes: string;
   quality_rating: number;
   complexity: string;
-  suggested_payout_usdc: number;
+  contribution_weight: number;
 }
 
 interface AnalysisModalProps {
@@ -286,24 +286,21 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                           {analysisResult.analysis_notes || "No notes available"}
                         </p>
                       </div>
-                      {/* <div className="pt-4 border-t border-gray-700">
+                      <div className="pt-4 border-t border-gray-700">
                         <p className="text-sm text-gray-400">
-                          Suggested Payout:
+                          Contribution Weight:
                         </p>
                         <p className="text-3xl font-bold text-green-400">
-                          ${(analysisResult.suggested_payout_usdc ?? 0).toFixed(
-                            2
-                          )}{" "}
-                          <span className="text-lg">USDC</span>
-                          {" "}
+                          {analysisResult.contribution_weight ?? 0} <span className="text-lg">/ 10</span>
+                          
                         </p>
                       </div>
                       <button
                         className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={(analysisResult.suggested_payout_usdc ?? 0) <= 0}
+                        disabled={(analysisResult.contribution_weight ?? 0) <= 0}
                       >
                         Add to Payout
-                      </button> */}
+                      </button>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-500">
