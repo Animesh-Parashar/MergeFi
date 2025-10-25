@@ -121,8 +121,6 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
 
       setAnalysisResult(geminiRes.data);
       console.log("Analysis Result:", geminiRes.data);
-
-
     } catch (err: any) {
       console.error("Error during analysis:", err);
       setError(err.response?.data?.error || "Failed to analyze PR");
@@ -130,7 +128,6 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
       setLoadingAnalysis(false);
     }
   };
-
 
   // Helper function to format dates
   const formatDate = (dateString: string) => {
@@ -294,8 +291,11 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                           Suggested Payout:
                         </p>
                         <p className="text-3xl font-bold text-green-400">
-                          ${(analysisResult.suggested_payout_usdc ?? 0).toFixed(2)}{" "}
+                          ${(analysisResult.suggested_payout_usdc ?? 0).toFixed(
+                            2
+                          )}{" "}
                           <span className="text-lg">USDC</span>
+                          {" "}
                         </p>
                       </div>
                       <button
