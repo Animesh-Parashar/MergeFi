@@ -21,22 +21,23 @@ import { getNetworkByChainId } from '../config/blockscout';
 interface StoredTransaction {
   id: number;
   tx_hash: string;
-  chain_id: number;
-  description: string;
+  from_chain_id: number;
+  to_chain_id?: number;
+  description?: string;
   created_at: string;
 }
 
 interface TransactionWithDetails extends StoredTransaction {
-  from_address: string;
-  to_address: string;
-  value: string;
-  token: string;
-  blockNumber: string;
-  confirmations: number;
-  fee: string;
-  method: string;
-  timestamp: string;
-  status: string;
+  from_address?: string;
+  to_address?: string;
+  value?: string;
+  token?: string;
+  blockNumber?: string;
+  confirmations?: number;
+  fee?: string;
+  method?: string;
+  timestamp?: string;
+  status?: string;
 }
 
 export function Transactions() {
@@ -53,69 +54,7 @@ export function Transactions() {
     pendingTxs: 0,
   });
 
-  // const BACKEND_URL = 'http://localhost:5000'; // TODO: Uncomment when backend is ready
-
-  // Dummy transactions for demo
-  const getDummyTransactions = (): StoredTransaction[] => {
-    return [
-      {
-        id: 1,
-        tx_hash: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1',
-        chain_id: 11155111,
-        description: 'Reward for PR #234 - Bug fix in authentication',
-        created_at: new Date(Date.now() - 5 * 60000).toISOString(),
-      },
-      {
-        id: 2,
-        tx_hash: '0x8ba1f109551bd432803012645ac136ddd64dba72',
-        chain_id: 11155111,
-        description: 'Reward for PR #235 - New feature implementation',
-        created_at: new Date(Date.now() - 15 * 60000).toISOString(),
-      },
-      {
-        id: 3,
-        tx_hash: '0x4e83362442b8d1bec281c06cb2cf39c8c36dd0d0',
-        chain_id: 421614,
-        description: 'Initial liquidity pool funding',
-        created_at: new Date(Date.now() - 30 * 60000).toISOString(),
-      },
-      {
-        id: 4,
-        tx_hash: '0x9e83362442b8d1bec281c06cb2cf39c8c36dd0e1',
-        chain_id: 11155111,
-        description: 'Reward for PR #236 - Documentation update',
-        created_at: new Date(Date.now() - 2 * 60000).toISOString(),
-      },
-      {
-        id: 5,
-        tx_hash: '0x1e83362442b8d1bec281c06cb2cf39c8c36dd0f2',
-        chain_id: 421614,
-        description: 'Cross-chain transfer via Avail',
-        created_at: new Date(Date.now() - 45 * 60000).toISOString(),
-      },
-      {
-        id: 6,
-        tx_hash: '0x2e83362442b8d1bec281c06cb2cf39c8c36dd0g3',
-        chain_id: 11155111,
-        description: 'Monthly reward distribution',
-        created_at: new Date(Date.now() - 60 * 60000).toISOString(),
-      },
-      {
-        id: 7,
-        tx_hash: '0x3e83362442b8d1bec281c06cb2cf39c8c36dd0h4',
-        chain_id: 421614,
-        description: 'Reward for PR #237 - Performance optimization',
-        created_at: new Date(Date.now() - 90 * 60000).toISOString(),
-      },
-      {
-        id: 8,
-        tx_hash: '0x4e83362442b8d1bec281c06cb2cf39c8c36dd0i5',
-        chain_id: 11155111,
-        description: 'Gas fee reimbursement',
-        created_at: new Date(Date.now() - 120 * 60000).toISOString(),
-      },
-    ];
-  };
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
   const fetchLatestTransactions = async () => {
     const isRefresh = !loading;
@@ -124,35 +63,41 @@ export function Transactions() {
     }
 
     try {
-      // For demo purposes, use dummy data
-      // TODO: Replace with actual API call when backend is ready
-      // const response = await fetch(`${BACKEND_URL}/api/transactions`);
-      // const data = await response.json();
-      // const storedTxs: StoredTransaction[] = data.transactions || [];
+      // Fetch transactions from backend
+      const response = await fetch(`${BACKEND_URL}/api/transactions`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch transactions from backend');
+      }
       
-      const storedTxs: StoredTransaction[] = getDummyTransactions();
+      const data = await response.json();
+      const storedTxs: StoredTransaction[] = data.transactions || [];
 
-      // Enrich with Blockscout data (placeholder - will fetch from API)
-      const enrichedTxs: TransactionWithDetails[] = storedTxs.map(tx => ({
-        ...tx,
-        from_address: '0x1234567890123456789012345678901234567890', // Will be fetched from Blockscout
-        to_address: '0x2345678901234567890123456789012345678901', // Will be fetched from Blockscout
-        value: '100', // Will be fetched from Blockscout
-        token: 'USDC', // Will be fetched from Blockscout
-        blockNumber: '1234567',
-        confirmations: 12,
-        fee: '0.001',
-        method: 'Transfer',
-        timestamp: tx.created_at,
-        status: 'success', // Will be fetched from Blockscout
-      }));
+      if (storedTxs.length === 0) {
+        setTransactions([]);
+        setFilteredTransactions([]);
+        setStats({
+          totalTransactions: 0,
+          successfulTxs: 0,
+          totalVolume: '0',
+          pendingTxs: 0,
+        });
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
 
-      /* TODO: Uncomment when backend is ready
       // Enrich each transaction with Blockscout data
-      const enrichedTxs = await Promise.all(
-        storedTxs.map(async (tx) => {
-          const network = getNetworkByChainId(tx.chain_id);
-          if (!network) return { ...tx };
+      const enrichedTxs: TransactionWithDetails[] = await Promise.all(
+        storedTxs.map(async (tx): Promise<TransactionWithDetails> => {
+          const network = getNetworkByChainId(tx.from_chain_id);
+          if (!network) {
+            return {
+              ...tx,
+              timestamp: new Date(tx.created_at).toLocaleString(),
+              method: 'Transfer',
+              status: 'unknown',
+            };
+          }
 
           try {
             const blockscoutResponse = await fetch(
@@ -161,16 +106,27 @@ export function Transactions() {
             
             if (blockscoutResponse.ok) {
               const blockscoutData = await blockscoutResponse.json();
+              
+              // Parse value (in Wei, convert to ETH)
+              const valueInWei = blockscoutData.value || '0';
+              const valueInEth = (parseFloat(valueInWei) / 1e18).toFixed(6);
+              
               return {
                 ...tx,
+                from_address: blockscoutData.from?.hash || '',
+                to_address: blockscoutData.to?.hash || '',
+                value: valueInEth,
+                token: network.currency,
                 blockNumber: blockscoutData.block?.toString() || '',
                 confirmations: blockscoutData.confirmations || 0,
-                fee: formatValue(blockscoutData.fee?.value || '0'),
-                method: blockscoutData.method || 'Transfer',
+                fee: blockscoutData.fee?.value 
+                  ? (parseFloat(blockscoutData.fee.value) / 1e18).toFixed(6)
+                  : '0',
+                method: blockscoutData.method || blockscoutData.tx_types?.[0] || 'Transfer',
                 timestamp: blockscoutData.timestamp 
                   ? new Date(blockscoutData.timestamp).toLocaleString() 
                   : new Date(tx.created_at).toLocaleString(),
-                blockscoutStatus: blockscoutData.status || tx.status,
+                status: blockscoutData.status === 'ok' ? 'success' : blockscoutData.status || 'pending',
               };
             }
           } catch (err) {
@@ -181,11 +137,13 @@ export function Transactions() {
           return {
             ...tx,
             timestamp: new Date(tx.created_at).toLocaleString(),
-            method: tx.type || 'Transfer',
+            method: 'Transfer',
+            status: 'pending',
+            value: '0',
+            token: network.currency,
           };
         })
       );
-      */
 
       setTransactions(enrichedTxs);
       setFilteredTransactions(enrichedTxs);
@@ -193,7 +151,7 @@ export function Transactions() {
       // Calculate stats
       const totalTxs = enrichedTxs.length;
       const successfulTxs = enrichedTxs.filter(
-        tx => tx.status === 'success' || tx.status === 'ok' || (tx as any).blockscoutStatus === 'ok'
+        tx => tx.status === 'success' || tx.status === 'ok'
       ).length;
       const pendingTxs = enrichedTxs.filter(
         tx => tx.status === 'pending'
@@ -212,6 +170,7 @@ export function Transactions() {
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
+      console.error('Error fetching transactions:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -246,12 +205,12 @@ export function Transactions() {
     setSearchQuery('');
   };
 
-  const formatAddress = (address: string): string => {
-    if (!address) return '';
+  const formatAddress = (address?: string): string => {
+    if (!address) return 'N/A';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status?: string) => {
     switch (status?.toLowerCase()) {
       case 'ok':
       case 'success':
@@ -422,7 +381,7 @@ export function Transactions() {
             </h2>
             <div className="space-y-4">
               {filteredTransactions.map((tx, index) => {
-                const network = getNetworkByChainId(tx.chain_id);
+                const network = getNetworkByChainId(tx.from_chain_id);
                 const explorerUrl = network ? `${network.explorerBase}/tx/${tx.tx_hash}` : '#';
                 
                 return (
@@ -481,7 +440,7 @@ export function Transactions() {
 
                         <div>
                           <div className="text-gray-400 text-sm mb-1">Network</div>
-                          <div className="text-sm">{network?.name || `Chain ${tx.chain_id}`}</div>
+                          <div className="text-sm">{network?.name || `Chain ${tx.from_chain_id}`}</div>
                         </div>
                       </div>
 
