@@ -104,6 +104,75 @@ export const BLOCKSCOUT_NETWORKS: Record<string, NetworkConfig> = {
       },
     },
   },
+
+  // Base Networks
+  'base': {
+    id: 'base',
+    name: 'Base',
+    apiBase: 'https://base.blockscout.com/api/v2',
+    explorerBase: 'https://base.blockscout.com',
+    chainId: 8453,
+    currency: 'ETH',
+    tokens: {
+      usdc: {
+        symbol: 'USDC',
+        address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        decimals: 6,
+      },
+    },
+  },
+  'base-sepolia': {
+    id: 'base-sepolia',
+    name: 'Base Sepolia',
+    apiBase: 'https://base-sepolia.blockscout.com/api/v2',
+    explorerBase: 'https://base-sepolia.blockscout.com',
+    chainId: 84532,
+    currency: 'ETH',
+    tokens: {
+      usdc: {
+        symbol: 'USDC',
+        address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+        decimals: 6,
+      },
+    },
+  },
+
+  // Optimism Networks
+  'optimism': {
+    id: 'optimism',
+    name: 'Optimism',
+    apiBase: 'https://optimism.blockscout.com/api/v2',
+    explorerBase: 'https://optimism.blockscout.com',
+    chainId: 10,
+    currency: 'ETH',
+    tokens: {
+      usdc: {
+        symbol: 'USDC',
+        address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
+        decimals: 6,
+      },
+      usdt: {
+        symbol: 'USDT',
+        address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58',
+        decimals: 6,
+      },
+    },
+  },
+  'optimism-sepolia': {
+    id: 'optimism-sepolia',
+    name: 'OP Sepolia',
+    apiBase: 'https://optimism-sepolia.blockscout.com/api/v2',
+    explorerBase: 'https://optimism-sepolia.blockscout.com',
+    chainId: 11155420,
+    currency: 'ETH',
+    tokens: {
+      usdc: {
+        symbol: 'USDC',
+        address: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7',
+        decimals: 6,
+      },
+    },
+  },
 };
 
 // Default network to use
