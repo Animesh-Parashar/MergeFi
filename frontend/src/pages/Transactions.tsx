@@ -89,58 +89,85 @@ export function Transactions() {
       // Enrich each transaction with Blockscout data
       const enrichedTxs: TransactionWithDetails[] = await Promise.all(
         storedTxs.map(async (tx): Promise<TransactionWithDetails> => {
-          const network = getNetworkByChainId(tx.from_chain_id);
-          if (!network) {
+          const fromNetwork = getNetworkByChainId(tx.from_chain_id);
+          const toNetwork = tx.to_chain_id ? getNetworkByChainId(tx.to_chain_id) : null;
+          
+          // Primary network to lookup the transaction (prefer destination chain)
+          const primaryNetwork = toNetwork || fromNetwork;
+          
+          if (!primaryNetwork) {
+            console.warn(`⚠️ Unknown network for chain IDs ${tx.from_chain_id} -> ${tx.to_chain_id}`);
             return {
               ...tx,
               timestamp: new Date(tx.created_at).toLocaleString(),
-              method: 'Transfer',
-              status: 'unknown',
+              method: 'Unknown Network',
+              status: 'error',
+              from_address: 'Unknown Chain',
+              to_address: 'Unknown Chain',
+              value: '0',
+              token: 'N/A',
             };
           }
 
-          try {
-            const blockscoutResponse = await fetch(
-              `${network.apiBase}/transactions/${tx.tx_hash}`
-            );
-            
-            if (blockscoutResponse.ok) {
-              const blockscoutData = await blockscoutResponse.json();
+          // Always try destination chain first (where the actual execution happens)
+          const chainsToTry = toNetwork ? [toNetwork] : [fromNetwork!];
+
+          for (const chainNetwork of chainsToTry) {
+            try {
+              console.log(`🔍 Looking up tx on ${chainNetwork.name}: ${tx.tx_hash.slice(0, 10)}...`);
+              const blockscoutResponse = await fetch(
+                `${chainNetwork.apiBase}/transactions/${tx.tx_hash}`
+              );
               
-              // Parse value (in Wei, convert to ETH)
-              const valueInWei = blockscoutData.value || '0';
-              const valueInEth = (parseFloat(valueInWei) / 1e18).toFixed(6);
-              
-              return {
-                ...tx,
-                from_address: blockscoutData.from?.hash || '',
-                to_address: blockscoutData.to?.hash || '',
-                value: valueInEth,
-                token: network.currency,
-                blockNumber: blockscoutData.block?.toString() || '',
-                confirmations: blockscoutData.confirmations || 0,
-                fee: blockscoutData.fee?.value 
-                  ? (parseFloat(blockscoutData.fee.value) / 1e18).toFixed(6)
-                  : '0',
-                method: blockscoutData.method || blockscoutData.tx_types?.[0] || 'Transfer',
-                timestamp: blockscoutData.timestamp 
-                  ? new Date(blockscoutData.timestamp).toLocaleString() 
-                  : new Date(tx.created_at).toLocaleString(),
-                status: blockscoutData.status === 'ok' ? 'success' : blockscoutData.status || 'pending',
-              };
+              if (blockscoutResponse.ok) {
+                const blockscoutData = await blockscoutResponse.json();
+                
+                // Check if result is actually success or pending
+                const txStatus = blockscoutData.result || blockscoutData.status;
+                console.log(`  ✅ Found on ${chainNetwork.name} - Status: ${txStatus}`);
+                
+                // Parse value (in Wei, convert to ETH)
+                const valueInWei = blockscoutData.value || '0';
+                const valueInEth = valueInWei === '0' ? '0.000000' : (parseFloat(valueInWei) / 1e18).toFixed(6);
+                
+                // Parse fee
+                const feeInWei = blockscoutData.fee?.value || blockscoutData.transaction_burnt_fee || '0';
+                const feeInEth = feeInWei === '0' ? '0.000000' : (parseFloat(feeInWei) / 1e18).toFixed(6);
+                
+                return {
+                  ...tx,
+                  from_address: blockscoutData.from?.hash || blockscoutData.from || 'Unknown',
+                  to_address: blockscoutData.to?.hash || blockscoutData.to || 'Unknown',
+                  value: valueInEth,
+                  token: chainNetwork.currency,
+                  blockNumber: blockscoutData.block?.toString() || 'Pending',
+                  confirmations: blockscoutData.confirmations || 0,
+                  fee: feeInEth,
+                  method: blockscoutData.method || blockscoutData.tx_types?.[0] || 'transfer',
+                  timestamp: blockscoutData.timestamp 
+                    ? new Date(blockscoutData.timestamp).toLocaleString() 
+                    : new Date(tx.created_at).toLocaleString(),
+                  status: txStatus === 'success' || txStatus === 'ok' ? 'success' : (txStatus || 'pending'),
+                };
+              } else {
+                console.warn(`  ⚠️ Not found on ${chainNetwork.name} (${blockscoutResponse.status})`);
+              }
+            } catch (err) {
+              console.error(`  ❌ Error fetching from ${chainNetwork.name}:`, err);
             }
-          } catch (err) {
-            console.error(`Error fetching blockscout data for ${tx.tx_hash}:`, err);
           }
           
-          // Return with default values if blockscout fetch fails
+          // Return with default values if blockscout fetch fails on all chains
+          console.warn(`  ⚠️ Transaction ${tx.tx_hash.slice(0, 10)}... not found on any chain`);
           return {
             ...tx,
             timestamp: new Date(tx.created_at).toLocaleString(),
             method: 'Transfer',
             status: 'pending',
-            value: '0',
-            token: network.currency,
+            from_address: 'Not Found',
+            to_address: 'Not Found',
+            value: '0.000000',
+            token: primaryNetwork.currency,
           };
         })
       );
@@ -381,8 +408,11 @@ export function Transactions() {
             </h2>
             <div className="space-y-4">
               {filteredTransactions.map((tx, index) => {
-                const network = getNetworkByChainId(tx.from_chain_id);
-                const explorerUrl = network ? `${network.explorerBase}/tx/${tx.tx_hash}` : '#';
+                const fromNetwork = getNetworkByChainId(tx.from_chain_id);
+                const toNetwork = tx.to_chain_id ? getNetworkByChainId(tx.to_chain_id) : null;
+                const displayNetwork = toNetwork || fromNetwork; // Use destination chain for explorer link
+                const explorerUrl = displayNetwork ? `${displayNetwork.explorerBase}/tx/${tx.tx_hash}` : '#';
+                const isCrossChain = tx.to_chain_id && tx.to_chain_id !== tx.from_chain_id;
                 
                 return (
                 <motion.div
@@ -439,8 +469,20 @@ export function Transactions() {
                         </div>
 
                         <div>
-                          <div className="text-gray-400 text-sm mb-1">Network</div>
-                          <div className="text-sm">{network?.name || `Chain ${tx.from_chain_id}`}</div>
+                          <div className="text-gray-400 text-sm mb-1">
+                            {isCrossChain ? 'From → To Network' : 'Network'}
+                          </div>
+                          <div className="text-sm">
+                            {isCrossChain ? (
+                              <span>
+                                {fromNetwork?.name || `Chain ${tx.from_chain_id}`}
+                                <span className="text-gray-500 mx-1">→</span>
+                                {toNetwork?.name || `Chain ${tx.to_chain_id}`}
+                              </span>
+                            ) : (
+                              <span>{fromNetwork?.name || `Chain ${tx.from_chain_id}`}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
