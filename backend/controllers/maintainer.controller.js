@@ -1,5 +1,6 @@
 import axios from "axios";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { supabase } from '../utils/supabase.js';
 
 // ================================
 //  MAINTAINER CONTROL (MAIN STATS)

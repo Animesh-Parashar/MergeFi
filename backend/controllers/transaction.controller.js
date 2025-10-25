@@ -5,11 +5,11 @@ export const storeTransaction = async (req, res) => {
   try {
     const { 
       tx_hash, 
-      chain_id,
-      description
+      from_chain_id,
+      to_chain_id
     } = req.body;
 
-    if (!tx_hash || !chain_id) {
+    if (!tx_hash || !from_chain_id) {
       return res.status(400).json({ 
         error: 'Transaction hash and chain ID are required' 
       });
@@ -20,8 +20,8 @@ export const storeTransaction = async (req, res) => {
       .insert([
         {
           tx_hash,
-          chain_id,
-          description: description || '',
+          from_chain_id,
+          to_chain_id,
           created_at: new Date().toISOString()
         }
       ])

@@ -9,7 +9,7 @@ import {
 const router = express.Router();
 
 // Store a new transaction
-router.post('/', storeTransaction);
+router.post('/saveTx', storeTransaction);
 
 // Get all transactions
 router.get('/', getAllTransactions);

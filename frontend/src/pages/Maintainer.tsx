@@ -104,6 +104,14 @@ export function Maintainer() {
   const [loadingRepoId, setLoadingRepoId] = useState<number | null>(null);
   const [totalForkedRepos, setTotalForkedRepos] = useState(0);
   const [listingRepoId, setListingRepoId] = useState<number | null>(null);
+  
+  // Add new state for listing modal
+  const [listingModal, setListingModal] = useState({
+    isOpen: false,
+    repo: null as Repository | null,
+    poolAmount: ''
+  });
+
   const reposPerPage = 6;
 
   useEffect(() => {
@@ -126,14 +134,18 @@ export function Maintainer() {
         withCredentials: true,
       });
 
-      const listedRepoIds = new Set(listedReposResponse.data.repos.map((r: any) => r.github_repo_id));
+      const listedRepos = listedReposResponse.data.repos;
+      const listedRepoMap = new Map(listedRepos.map((r: any) => [r.github_repo_id, r]));
 
-      // Add status for repositories
-      const reposWithStatus = repositories.map((repo: Repository) => ({
-        ...repo,
-        isOpenToContributions: listedRepoIds.has(repo.id),
-        poolAmount: 0,
-      }));
+      // Add status and pool amount for repositories
+      const reposWithStatus = repositories.map((repo: Repository) => {
+        const listedRepo = listedRepoMap.get(repo.id);
+        return {
+          ...repo,
+          isOpenToContributions: !!listedRepo,
+          poolAmount: listedRepo?.pool_reward || 0, // Fetch pool_reward from backend
+        };
+      });
 
       setUser(user);
       setRepositories(reposWithStatus);
@@ -149,13 +161,32 @@ export function Maintainer() {
   };
 
   const handleListRepo = async (repo: Repository) => {
+    // Show modal to enter pool amount
+    setListingModal({
+      isOpen: true,
+      repo: repo,
+      poolAmount: ''
+    });
+  };
+
+  const handleConfirmListing = async () => {
+    const { repo, poolAmount } = listingModal;
+    
+    if (!repo) return;
+    
+    const poolAmountNum = parseFloat(poolAmount);
+    if (isNaN(poolAmountNum) || poolAmountNum < 0) {
+      setError('Please enter a valid pool amount (0 or greater)');
+      return;
+    }
+
     try {
       setListingRepoId(repo.id);
       setError(null);
 
       const [owner, repoName] = repo.full_name.split('/');
 
-      // Call backend to list the repository
+      // Call backend to list the repository with pool amount
       await axios.post(
         'http://localhost:5000/api/repos/list',
         {
@@ -169,6 +200,7 @@ export function Maintainer() {
           language: repo.language,
           stargazers_count: repo.stargazers_count,
           forks_count: repo.forks_count,
+          pool_reward: poolAmountNum
         },
         { withCredentials: true }
       );
@@ -177,12 +209,14 @@ export function Maintainer() {
       setRepositories(prev =>
         prev.map(r =>
           r.id === repo.id
-            ? { ...r, isOpenToContributions: true }
+            ? { ...r, isOpenToContributions: true, poolAmount: poolAmountNum }
             : r
         )
       );
 
-      alert(`${repo.name} is now open for contributions!`);
+      // Close modal and reset
+      setListingModal({ isOpen: false, repo: null, poolAmount: '' });
+      alert(`${repo.name} is now open for contributions with a pool of $${poolAmountNum} USDC!`);
     } catch (error: any) {
       console.error('Error listing repository:', error);
       setError(error.response?.data?.error || 'Failed to list repository');
@@ -668,8 +702,8 @@ export function Maintainer() {
 
                                 <div className="flex items-center justify-between pt-3 border-t border-gray-800">
                                   <div>
-                                    <div className="text-sm text-gray-400">
-                                      Pool: ${repo.poolAmount?.toLocaleString() || 0} USDC
+                                    <div className="text-sm font-semibold text-gray-300">
+                                      Pool: <span className="text-green-400">${repo.poolAmount?.toLocaleString() || 0}</span> USDC
                                     </div>
                                     <div className="text-xs text-gray-500">
                                       {repo.stats.open_issues_count} open issues
@@ -720,7 +754,7 @@ export function Maintainer() {
                                       size="sm"
                                       variant="secondary"
                                       onClick={() => handlePayout(repo)}
-                                      disabled={loadingRepoId === repo.id}
+                                      disabled={loadingRepoId === repo.id || !repo.isOpenToContributions}
                                     >
                                       {loadingRepoId === repo.id ? 'Loading...' : 'Payout'}
                                     </Button>
@@ -799,6 +833,83 @@ export function Maintainer() {
         onConfirmPayout={handleConfirmPayout}
       />
 
+      {/* Listing Modal */}
+      {listingModal.isOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full"
+          >
+            <h3 className="text-xl font-bold mb-4">
+              List Repository for Contributions
+            </h3>
+            
+            <div className="mb-4">
+              <p className="text-gray-400 mb-2">
+                Repository: <span className="text-white font-semibold">{listingModal.repo?.name}</span>
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm text-gray-400 mb-2">
+                Initial Pool Reward (USDC)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Enter amount (e.g., 1000)"
+                value={listingModal.poolAmount}
+                onChange={(e) =>
+                  setListingModal(prev => ({
+                    ...prev,
+                    poolAmount: e.target.value
+                  }))
+                }
+                className="w-full bg-black border border-gray-700 rounded px-4 py-2 text-white focus:outline-none focus:border-white"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                This amount will be available for contributor payouts
+              </p>
+            </div>
+
+            {error && (
+              <div className="bg-red-900/50 border border-red-700 rounded p-3 mb-4">
+                <p className="text-red-300 text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setListingModal({ isOpen: false, repo: null, poolAmount: '' });
+                  setError(null);
+                }}
+                disabled={listingRepoId !== null}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmListing}
+                disabled={listingRepoId !== null}
+                className="flex-1"
+              >
+                {listingRepoId !== null ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Listing...
+                  </>
+                ) : (
+                  'Confirm & List'
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

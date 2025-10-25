@@ -7,6 +7,7 @@ import { Maintainer } from './pages/Maintainer';
 import { Contributor } from './pages/Contributor';
 // import { Owner } from './pages/Owner';
 import { Transactions } from './pages/Transactions';
+import { ListedRepos } from './pages/ListedRepos';
 
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
                 <Route path="/maintainer" element={<Maintainer />} />
                 <Route path="/contributor" element={<Contributor />} />
                 <Route path="/transactions" element={<Transactions />} />
+                <Route path="/listed-repos" element={<ListedRepos />} />
               </Routes>
             </div>
           </div>
