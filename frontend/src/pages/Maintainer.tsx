@@ -104,7 +104,7 @@ export function Maintainer() {
   const [loadingRepoId, setLoadingRepoId] = useState<number | null>(null);
   const [totalForkedRepos, setTotalForkedRepos] = useState(0);
   const [listingRepoId, setListingRepoId] = useState<number | null>(null);
-  
+
   // Add new state for listing modal
   const [listingModal, setListingModal] = useState({
     isOpen: false,
@@ -171,9 +171,9 @@ export function Maintainer() {
 
   const handleConfirmListing = async () => {
     const { repo, poolAmount } = listingModal;
-    
+
     if (!repo) return;
-    
+
     const poolAmountNum = parseFloat(poolAmount);
     if (isNaN(poolAmountNum) || poolAmountNum < 0) {
       setError('Please enter a valid pool amount (0 or greater)');
@@ -330,11 +330,23 @@ export function Maintainer() {
     }
 
     try {
+      // **FILTER OUT THE MAINTAINER** - Only process contributors who are not the maintainer
+      const contributorsExcludingMaintainer = payoutContributors.filter(
+        contributor => contributor.login !== user?.login
+      );
+
+      if (contributorsExcludingMaintainer.length === 0) {
+        setError('No contributors to process payout for (excluding maintainer)');
+        return;
+      }
+
+      console.log(`Processing payout for ${contributorsExcludingMaintainer.length} contributors (excluding maintainer ${user?.login})`);
+
       // Calculate weighted contributions (contributions × weight) for each contributor
       const fundAmountNum = parseFloat(payoutFundAmount);
 
-      // Calculate total weighted contributions: Σ(contributions × weight)
-      const totalWeightedContributions = payoutContributors.reduce((sum, c) =>
+      // Calculate total weighted contributions: Σ(contributions × weight) - ONLY for non-maintainer contributors
+      const totalWeightedContributions = contributorsExcludingMaintainer.reduce((sum, c) =>
         sum + (c.contributions * (c.weight || 0)), 0
       );
 
@@ -344,7 +356,7 @@ export function Maintainer() {
       }
 
       // Calculate individual payouts using: (contributions × weight) / Σ(contributions × weight) × totalPool
-      const nftContributors: NFTContributor[] = payoutContributors.map(contributor => {
+      const nftContributors: NFTContributor[] = contributorsExcludingMaintainer.map(contributor => {
         const weightedContribution = contributor.contributions * (contributor.weight || 0);
         const amount = (weightedContribution / totalWeightedContributions) * fundAmountNum;
         // Round to 2 decimal places
@@ -358,10 +370,11 @@ export function Maintainer() {
         };
       });
 
-      console.log('Processing payout with NFT minting:', {
+      console.log('Processing payout with NFT minting (excluding maintainer):', {
         repo: selectedRepo.name,
         totalAmount: fundAmountNum.toFixed(2),
         totalWeightedContributions,
+        maintainerExcluded: user?.login,
         contributors: nftContributors.map(c => ({
           name: c.name,
           amount: c.amount.toFixed(2),
@@ -370,7 +383,7 @@ export function Maintainer() {
       });
 
       // Call cross-chain NFT minting service
-      console.log('Starting NFT minting for contributors...');
+      console.log('Starting NFT minting for contributors (excluding maintainer)...');
 
       // Import NFT services
       const { callMintCrossChainRewardNFT } = await import('../services/runtransaction');
@@ -378,21 +391,9 @@ export function Maintainer() {
       // Get current MetaMask connected chain as source chain
       let sourceChainId = 11155111; // Default to Sepolia
 
-      // if (window.ethereum) {
-      //   try {
-      //     const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      //     sourceChainId = parseInt(chainId, 16);
-      //     console.log('Connected MetaMask chain ID:', sourceChainId);
-      //   } catch (error) {
-      //     console.error('Error getting MetaMask chain ID:', error);
-      //   }
-      // }
-
       // API function to get user's chainId preference
       const getUserChainId = async (githubUsername: string): Promise<number | null> => {
         try {
-
-
           const response = await axios.post('http://localhost:5000/api/getchain', {
             github_username: githubUsername
           }, { withCredentials: true });
@@ -406,7 +407,7 @@ export function Maintainer() {
         }
       };
 
-      // Process each contributor individually
+      // Process each contributor individually (excluding maintainer)
       for (const contributor of nftContributors) {
         try {
           console.log(`Processing NFT mint for ${contributor.name} (${contributor.address})`);
@@ -419,8 +420,8 @@ export function Maintainer() {
           const targetChainId = userChainId || sourceChainId;
 
           if (targetChainId === sourceChainId) {
-      console.warn(`⚠️ User ${contributor.name} target chain same as source. No bridging needed.`);
-    }
+            console.warn(`⚠️ User ${contributor.name} target chain same as source. No bridging needed.`);
+          }
 
           console.log(`Minting NFT from chain ${sourceChainId} to chain ${targetChainId} for ${contributor.name}`);
 
@@ -442,14 +443,7 @@ export function Maintainer() {
         }
       }
 
-      console.log('🎉 NFT minting process completed for all contributors.');
-
-
-      // TODO: Make API call to record payout in database
-      // await axios.post(`http://localhost:5000/api/repository/${selectedRepo.id}/payout`, {
-      //   contributors: nftContributors,
-      //   totalAmount: fundAmountNum
-      // }, { withCredentials: true });
+      console.log('🎉 NFT minting process completed for all contributors (maintainer excluded).');
 
       // Update repository pool amount
       setRepositories(prev =>
@@ -460,7 +454,7 @@ export function Maintainer() {
         )
       );
 
-      alert('Payout and NFT minting completed successfully!');
+      alert(`Payout and NFT minting completed successfully for ${nftContributors.length} contributors (maintainer excluded)!`);
       setShowPayoutModal(false);
       setPayoutContributors([]);
       setPayoutFundAmount('');
@@ -831,6 +825,7 @@ export function Maintainer() {
         onFundAmountChange={setPayoutFundAmount}
         onWeightChange={handleWeightChange}
         onConfirmPayout={handleConfirmPayout}
+        maintainerLogin={user?.login} // Add this prop
       />
 
       {/* Listing Modal */}
@@ -844,7 +839,7 @@ export function Maintainer() {
             <h3 className="text-xl font-bold mb-4">
               List Repository for Contributions
             </h3>
-            
+
             <div className="mb-4">
               <p className="text-gray-400 mb-2">
                 Repository: <span className="text-white font-semibold">{listingModal.repo?.name}</span>
