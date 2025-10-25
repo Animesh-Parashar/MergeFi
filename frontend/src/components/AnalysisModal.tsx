@@ -87,7 +87,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
     setError(null);
     try {
       const response = await axios.get(
-        `http://localhost:5000/api/maintainer/${owner}/${repo}/${contributor.login}/merged-prs`,
+        `https://mergefi.onrender.com/api/maintainer/${owner}/${repo}/${contributor.login}/merged-prs`,
         { withCredentials: true }
       );
       setMergedPRs(response.data);
@@ -108,13 +108,13 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
 
     try {
       const analysisDataRes = await axios.get<PRAnalysisData>(
-        `http://localhost:5000/api/maintainer/${owner}/${repo}/pr-data/${pr.number}`,
+        `https://mergefi.onrender.com/api/maintainer/${owner}/${repo}/pr-data/${pr.number}`,
         { withCredentials: true }
       );
 
       const { prBody, diffContent, issueBody } = analysisDataRes.data;
       const geminiRes = await axios.post<AnalysisResult>(
-        `http://localhost:5000/api/ai/analyze-pr`,
+        `https://mergefi.onrender.com/api/ai/analyze-pr`,
         { prBody, diffContent, issueBody }, // Send the data in the request body
         { withCredentials: true }
       );
@@ -295,12 +295,12 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                           
                         </p>
                       </div>
-                      <button
+                      {/* <button
                         className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={(analysisResult.contribution_weight ?? 0) <= 0}
                       >
                         Add to Payout
-                      </button>
+                      </button> */}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-500">

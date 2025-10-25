@@ -123,14 +123,14 @@ export function Maintainer() {
       setLoading(true);
       setError(null);
 
-      const response = await axios.get<MaintainerData>('http://localhost:5000/api/maintainer', {
+      const response = await axios.get<MaintainerData>('https://mergefi.onrender.com/api/maintainer', {
         withCredentials: true,
       });
 
       const { user, repositories, stats } = response.data;
 
       // Fetch which repos are listed from Supabase
-      const listedReposResponse = await axios.get('http://localhost:5000/api/repos/listed', {
+      const listedReposResponse = await axios.get('https://mergefi.onrender.com/api/repos/listed', {
         withCredentials: true,
       });
 
@@ -188,7 +188,7 @@ export function Maintainer() {
 
       // Call backend to list the repository with pool amount
       await axios.post(
-        'http://localhost:5000/api/repos/list',
+        'https://mergefi.onrender.com/api/repos/list',
         {
           github_repo_id: repo.id,
           owner: owner,
@@ -231,7 +231,7 @@ export function Maintainer() {
       setError(null);
 
       await axios.post(
-        'http://localhost:5000/api/repos/unlist',
+        'https://mergefi.onrender.com/api/repos/unlist',
         { github_repo_id: repo.id },
         { withCredentials: true }
       );
@@ -262,7 +262,7 @@ export function Maintainer() {
       const [owner, repoName] = repo.full_name.split('/');
 
       const response = await axios.get(
-        `http://localhost:5000/api/maintainer/${owner}/${repoName}/contributors-wallets`,
+        `https://mergefi.onrender.com/api/maintainer/${owner}/${repoName}/contributors-wallets`,
         { withCredentials: true }
       );
 
@@ -394,7 +394,7 @@ export function Maintainer() {
       // API function to get user's chainId preference
       const getUserChainId = async (githubUsername: string): Promise<number | null> => {
         try {
-          const response = await axios.post('http://localhost:5000/api/getchain', {
+          const response = await axios.post('https://mergefi.onrender.com/api/getchain', {
             github_username: githubUsername
           }, { withCredentials: true });
 

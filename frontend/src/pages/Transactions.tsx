@@ -54,7 +54,7 @@ export function Transactions() {
     pendingTxs: 0,
   });
 
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://mergefi.onrender.com';
 
   const fetchLatestTransactions = async () => {
     const isRefresh = !loading;

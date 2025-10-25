@@ -47,7 +47,7 @@ export function Home() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Only accept messages from our backend domain
-      if (event.origin !== 'http://localhost:5000') return;
+      if (event.origin !== 'https://mergefi.onrender.com') return;
 
       if (event.data.type === 'GITHUB_AUTH_SUCCESS') {
         handleAuthSuccess();
@@ -66,7 +66,7 @@ export function Home() {
 
   const checkAuthStatus = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/auth/status', {
+      const response = await axios.get('https://mergefi.onrender.com/api/auth/status', {
         withCredentials: true,
       });
 
@@ -99,7 +99,7 @@ export function Home() {
   const fetchRegisteredRepos = async () => {
     setLoadingRepos(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/repos/all-listed');
+      const response = await axios.get('https://mergefi.onrender.com/api/repos/all-listed');
       if (response.data.success) {
         setRegisteredRepos(response.data.repos);
       }
@@ -128,7 +128,7 @@ export function Home() {
 
       // Open GitHub OAuth in popup
       const popup = window.open(
-        'http://localhost:5000/auth/github',
+        'https://mergefi.onrender.com/auth/github',
         'github-oauth',
         'width=600,height=700,scrollbars=yes,resizable=yes'
       );
@@ -158,7 +158,7 @@ export function Home() {
 
     try {
       // Fetch user data
-      const response = await axios.get('http://localhost:5000/api/auth/user', {
+      const response = await axios.get('https://mergefi.onrender.com/api/auth/user', {
         withCredentials: true,
       });
 

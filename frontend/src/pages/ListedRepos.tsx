@@ -39,7 +39,7 @@ export function ListedRepos() {
   const fetchListedRepos = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/repos/all-listed');
+      const response = await axios.get('https://mergefi.onrender.com/api/repos/all-listed');
       if (response.data.success) {
         setRepositories(response.data.repos);
         setFilteredRepos(response.data.repos);

@@ -334,7 +334,7 @@ async function storeTransactionInDB(
     try {
         console.log('💾 Storing transaction in database...');
 
-        // const response = await fetch('http://localhost:5000/api/transactions/saveTx', {
+        // const response = await fetch('https://mergefi.onrender.com/api/transactions/saveTx', {
         //     method: 'POST',
         //     headers: {
         //         'Content-Type': 'application/json',
@@ -348,7 +348,7 @@ async function storeTransactionInDB(
         console.log({ tx_hash: txHash,
             from_chain_id: fromChainId,
             to_chain_id: toChainId,});
-        const response = await axios.post('http://localhost:5000/api/transactions/saveTx', {
+        const response = await axios.post('https://mergefi.onrender.com/api/transactions/saveTx', {
             tx_hash: txHash,
             from_chain_id: fromChainId,
             to_chain_id: toChainId,

@@ -49,7 +49,7 @@ const ContributorsModal: React.FC<ContributorsModalProps> = ({
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:5000/api/maintainer/${owner}/${repo}/contributors`,
+        `https://mergefi.onrender.com/api/maintainer/${owner}/${repo}/contributors`,
         {
           credentials: "include",
         }

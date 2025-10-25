@@ -70,10 +70,10 @@ export function Contributor() {
       setLoading(true);
       
       const [statsResponse, earningsResponse] = await Promise.all([
-        axios.get('http://localhost:5000/api/contributor/stats', {
+        axios.get('https://mergefi.onrender.com/api/contributor/stats', {
           withCredentials: true,
         }),
-        axios.get('http://localhost:5000/api/contributor/earnings', {
+        axios.get('https://mergefi.onrender.com/api/contributor/earnings', {
           withCredentials: true,
         }),
       ]);

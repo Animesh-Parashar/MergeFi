@@ -44,7 +44,7 @@ export function Navbar() {
       //   chain: chainId
       // });
 
-      const response = await fetch('http://localhost:5000/api/set-user-data', {
+      const response = await fetch('https://mergefi.onrender.com/api/set-user-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ export function Navbar() {
   // Fetch GitHub username from API using cookie token
   const fetchGithubUsername = async (): Promise<string> => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/user', {
+      const response = await fetch('https://mergefi.onrender.com/api/auth/user', {
         credentials: 'include' // Include cookies
       });
 

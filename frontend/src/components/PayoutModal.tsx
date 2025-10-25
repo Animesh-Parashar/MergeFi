@@ -63,7 +63,7 @@ const PayoutModal: React.FC<PayoutModalProps> = ({
 
     try {
       const response = await axios.post(
-        'http://localhost:5000/api/ai/calculate-contributor-weight',
+        'https://mergefi.onrender.com/api/ai/calculate-contributor-weight',
         {
           owner,
           repo,
