@@ -289,7 +289,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                           {analysisResult.analysis_notes || "No notes available"}
                         </p>
                       </div>
-                      <div className="pt-4 border-t border-gray-700">
+                      {/* <div className="pt-4 border-t border-gray-700">
                         <p className="text-sm text-gray-400">
                           Suggested Payout:
                         </p>
@@ -303,7 +303,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                         disabled={(analysisResult.suggested_payout_usdc ?? 0) <= 0}
                       >
                         Add to Payout
-                      </button>
+                      </button> */}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-500">
