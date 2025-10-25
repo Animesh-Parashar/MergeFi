@@ -52,7 +52,7 @@ export const storeTransaction = async (req, res) => {
 // Get all transactions
 export const getAllTransactions = async (req, res) => {
   try {
-    const { chain_id, limit = 50 } = req.query;
+    const { from_chain_id, limit = 50 } = req.query;
 
     let query = supabase
       .from('transactions')
@@ -60,8 +60,8 @@ export const getAllTransactions = async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(parseInt(limit));
 
-    if (chain_id) {
-      query = query.eq('chain_id', chain_id);
+    if (from_chain_id) {
+      query = query.eq('from_chain_id', from_chain_id);
     }
 
     const { data, error } = await query;
