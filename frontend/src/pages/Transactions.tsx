@@ -134,13 +134,16 @@ export function Transactions() {
                 const feeInWei = blockscoutData.fee?.value || blockscoutData.transaction_burnt_fee || '0';
                 const feeInEth = feeInWei === '0' ? '0.000000' : (parseFloat(feeInWei) / 1e18).toFixed(6);
                 
+                // Get block number (try multiple fields)
+                const blockNum = blockscoutData.block_number || blockscoutData.block || blockscoutData.height;
+                
                 return {
                   ...tx,
                   from_address: blockscoutData.from?.hash || blockscoutData.from || 'Unknown',
                   to_address: blockscoutData.to?.hash || blockscoutData.to || 'Unknown',
                   value: valueInEth,
                   token: chainNetwork.currency,
-                  blockNumber: blockscoutData.block?.toString() || 'Pending',
+                  blockNumber: blockNum ? blockNum.toString() : 'Pending',
                   confirmations: blockscoutData.confirmations || 0,
                   fee: feeInEth,
                   method: blockscoutData.method || blockscoutData.tx_types?.[0] || 'transfer',
