@@ -47,7 +47,7 @@ Contributors are rewarded not only financially, they also earn **NFT badges** fo
 Maintainer Repo
     └── PR-Pool Contract (per repo)
           ├── AI Pricing Engine
-          ├── Reward Pool (PYUSD)
+          ├── Reward Pool (USDC)
           ├── Avail Bridge
           ├── NFT Badge Minting
           └── Blockscout Integration
@@ -75,7 +75,7 @@ Maintainer Repo
 | Cross-Chain Layer   | Avail                          |
 | NFTs                | ERC-721 Badges                 |
 | Frontend            | React / Next.js                |
-| AI Engine           | Gemini-API
+| AI Engine           | Gemini-API                     |
 | Blockchain Explorer | Blockscout                     |
 | Backend             | Node.js + Express              |
 | Storage             | IPFS / Pinata (for metadata)   |
@@ -141,8 +141,8 @@ We welcome contributions!
 
 | Role         | Token      | Purpose                                |
 | ------------ | ---------- | -------------------------------------- |
-| Maintainers  | PYUSD      | Deposit to fund reward pools           |
-| Contributors | PYUSD      | Receive payment for merged PRs         |
+| Maintainers  | USDC       | Deposit to fund reward pools           |
+| Contributors | USDC       | Receive payment for merged PRs         |
 | Contributors | NFT Badges | Earn collectible proof of contribution |
 
 ---
