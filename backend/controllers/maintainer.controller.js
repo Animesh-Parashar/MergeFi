@@ -246,7 +246,7 @@ export const getRepoContributors = async (req, res) => {
       ),
       average_contributions: Math.round(
         detailedContributors.reduce((sum, c) => sum + c.contributions, 0) /
-          detailedContributors.length
+        detailedContributors.length
       ),
     };
 
@@ -526,8 +526,16 @@ Return valid JSON only.
 
     const cleanedText = text.replace(/```json/g, "").replace(/```/g, "");
     const jsonResponse = JSON.parse(cleanedText);
+    const analysisResult = {
+      solves_issue: jsonResponse.solves_issue ?? (jsonResponse.reward > 0),
+      analysis_notes: jsonResponse.analysis_notes || jsonResponse.analysis || "No analysis provided",
+      quality_rating: jsonResponse.quality_rating ?? jsonResponse.quality ?? 0,
+      complexity: jsonResponse.complexity || "Unknown",
+      suggested_payout_usdc: jsonResponse.suggested_payout_usdc ?? jsonResponse.reward ?? 0
+    };
 
-    res.json(jsonResponse);
+    console.log("Gemini API response:", analysisResult);
+    res.json(analysisResult);
   } catch (err) {
     console.error("Error calling Gemini API:", err);
     res.status(500).json({ error: "Failed to get analysis from AI" });
