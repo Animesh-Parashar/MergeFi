@@ -19,12 +19,18 @@ const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 
 // Update CORS configuration
+
 app.use(cors({
   origin: process.env.FRONTEND_URL,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
+app.use((req, res, next) => {
+  console.log('[DEBUG COOKIES]', req.headers.cookie);
+  next();
+});
+
 
 // 1️⃣ Redirect user to GitHub for login
 app.get("/auth/github", (req, res) => {
