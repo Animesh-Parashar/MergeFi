@@ -143,7 +143,7 @@ export function Maintainer() {
         return {
           ...repo,
           isOpenToContributions: !!listedRepo,
-          poolAmount: listedRepo?.pool_reward || 0, // Fetch pool_reward from backend
+          // poolAmount: listedRepo?.pool_reward || 0, // Fetch pool_reward from backend
         };
       });
 
@@ -696,9 +696,9 @@ export function Maintainer() {
 
                                 <div className="flex items-center justify-between pt-3 border-t border-gray-800">
                                   <div>
-                                    <div className="text-sm font-semibold text-gray-300">
+                                    {/* <div className="text-sm font-semibold text-gray-300">
                                       Pool: <span className="text-green-400">${repo.poolAmount?.toLocaleString() || 0}</span> USDC
-                                    </div>
+                                    </div> */}
                                     <div className="text-xs text-gray-500">
                                       {repo.stats.open_issues_count} open issues
                                     </div>
