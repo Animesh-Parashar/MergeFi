@@ -22,7 +22,7 @@ Contributors are rewarded not only financially, they also earn **NFT badges** fo
 ### 🧩 **Cross-Chain Payments via Avail**
 
 * Leverages **Avail** for secure and scalable cross-chain interactions.
-* Enables smooth PYUSD transfers to contributors across supported networks.
+* Enables smooth USDC transfers to contributors across supported networks.
 
 ### 🔍 **Transparent Tracking with Blockscout**
 
@@ -61,7 +61,7 @@ Maintainer Repo
 2. **Contributors submit PRs** as usual.
 3. **AI evaluates** the PR and suggests a reward amount.
 4. **Maintainer approves/rejects** the AI’s recommendation.
-5. **PYUSD is sent** to the contributor via the Avail bridge.
+5. **USDc is sent** to the contributor via the Avail bridge.
 6. **NFT badge** is minted for the contributor’s wallet.
 7. **All transactions** are displayed on the Merged PRs page using Blockscout data.
 
@@ -71,7 +71,7 @@ Maintainer Repo
 
 | Component           | Technology                     |
 | ------------------- | ------------------------------ |
-| Smart Contracts     | Solidity, Hardhat              |
+| Smart Contracts     | Solidity, Foundry              |
 | Cross-Chain Layer   | Avail                          |
 | NFTs                | ERC-721 Badges                 |
 | Frontend            | React / Next.js                |
@@ -106,12 +106,17 @@ npm run dev
 Create a `.env` file with the following:
 
 ```bash
-BLOCKSCOUT_API_URL=
-AVAIL_RPC_URL=
-PYUSD_CONTRACT_ADDRESS=
-AI_API_KEY=
-NFT_BASE_URI=
-WALLET_PRIVATE_KEY=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+FRONTEND_URL=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+PRIVATE_KEY=
+SEPOLIA_RPC_URL=
+ARBITRUM_SEPOLIA_RPC_URL=
+SEPOLIA_ROUTER_ADDRESS=
+ARBITRUM_ROUTER_ADDRESS=
+GEMINI_API_KEY=
 ```
 
 ---
@@ -121,7 +126,7 @@ WALLET_PRIVATE_KEY=
 Deploy your smart contracts to a testnet or mainnet:
 
 ```bash
-npx hardhat run scripts/deploy.js --network avail
+forge script script/Deploy.s.sol:DeployScript --rpc-url $AVAIL_RPC_URL --broadcast
 ```
 
 ---
@@ -157,7 +162,6 @@ This project is licensed under the **MIT License** — see [LICENSE](LICENSE) fo
 
 * [x] Add GitHub OAuth integration for maintainer verification
 * [x] Expand AI models for PR valuation
-* [x] Support multiple stablecoins (USDC, DAI, etc.)
 * [x] Launch public dashboard for project rankings
 * [x] Gamify contributor badges with rarity tiers
 
