@@ -100,7 +100,7 @@ app.get("/auth/github/callback", async (req, res) => {
 // 3️⃣ Check authentication status
 app.get("/api/auth/status", async (req, res) => {
   const { github_token } = req.cookies;
-
+console.log('Cookies received at /api/auth/status:', req.cookies);
   if (!github_token) {
     console.log('[api/auth/status] no github_token cookie present');
     return res.json({ authenticated: false });
