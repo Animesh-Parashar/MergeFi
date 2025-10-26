@@ -61,7 +61,7 @@ Maintainer Repo
 2. **Contributors submit PRs** as usual.
 3. **AI evaluates** the PR and suggests a reward amount.
 4. **Maintainer approves/rejects** the AI’s recommendation.
-5. **USDc is sent** to the contributor via the Avail bridge.
+5. **USDC is sent** to the contributor via the Avail bridge.
 6. **NFT badge** is minted for the contributor’s wallet.
 7. **All transactions** are displayed on the Merged PRs page using Blockscout data.
 
@@ -74,7 +74,7 @@ Maintainer Repo
 | Smart Contracts     | Solidity, Foundry              |
 | Cross-Chain Layer   | Avail                          |
 | NFTs                | ERC-721 Badges                 |
-| Frontend            | React / Next.js                |
+| Frontend            | React / TypeScript             |
 | AI Engine           | Gemini-API                     |
 | Blockchain Explorer | Blockscout                     |
 | Backend             | Node.js + Express              |
@@ -86,14 +86,14 @@ Maintainer Repo
 
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/pr-pool.git
-cd pr-pool
+git clone https://github.com/<your-username>/MergeFimgit
+cd MergeFi
 
 # Install dependencies
 npm install
 
 # Compile contracts
-npx hardhat compile
+forge build
 
 # Run local dev server
 npm run dev
@@ -126,7 +126,7 @@ GEMINI_API_KEY=
 Deploy your smart contracts to a testnet or mainnet:
 
 ```bash
-forge script script/Deploy.s.sol:DeployScript --rpc-url $AVAIL_RPC_URL --broadcast
+forge script script/Deploy.s.sol --rpc-url <NETWORK_RPC_URL> --broadcast
 ```
 
 ---
