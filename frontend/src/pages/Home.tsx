@@ -47,7 +47,8 @@ export function Home() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Only accept messages from our backend domain
-      if (event.origin !== 'https://mergefi.onrender.com') return;
+      const backendURL = 'https://mergefi.onrender.com'; // Should match your backend URL
+      if (!event.origin.includes(backendURL)) return;
 
       if (event.data.type === 'GITHUB_AUTH_SUCCESS') {
         handleAuthSuccess();

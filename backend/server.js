@@ -50,11 +50,10 @@ app.get("/auth/github/callback", async (req, res) => {
 
     res.cookie('github_token', accessToken, {
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: 'none', // Required for cross-origin cookies
       maxAge: 24 * 60 * 60 * 1000,
       path: '/',
-      secure: true, // add this for HTTPS
-      domain: '.onrender.com' // if both frontend and backend are on *.onrender.com
+      secure: true  // Required for sameSite: 'none'
     });
 
     // Send message to parent window and close popup
