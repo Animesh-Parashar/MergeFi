@@ -314,8 +314,8 @@ export function Contributor() {
           </Card>
         </div>
 
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Earnings Growth</h2>
+        {/* <div className="mb-12">
+            <h2 className="text-2xl font-bold mb-6">Earnings Growth</h2> 
           <Card>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
@@ -350,7 +350,7 @@ export function Contributor() {
               </ResponsiveContainer>
             </div>
           </Card>
-        </div>
+        </div> */}
 
         <div className="grid lg:grid-cols-2 gap-6 mb-12">
           <div>
