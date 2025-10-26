@@ -14,7 +14,7 @@
   "dependencies": {
     "@avail-project/nexus-core": "^0.0.1",
     "@avail-project/nexus-widgets": "^0.0.5",
-    "@blockscout/app-sdk": "^0.1.2",
+    "@rollup/plugin-inject": "^5.0.5",
     "@supabase/supabase-js": "^2.57.4",
     "@tanstack/react-query": "^5.90.5",
     "@wagmi/core": "^2.22.1",
@@ -24,7 +24,7 @@
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.344.0",
     "process": "^0.11.10",
-    "react": "^18.3.1",
+    "react": "^18.0.0",
     "react-dom": "^18.3.1",
     "react-is": "^19.2.0",
     "react-router-dom": "^7.9.4",
