@@ -11,7 +11,7 @@ console.log(process.env.GITHUB_CLIENT_ID);
 console.log(process.env.GITHUB_CLIENT_SECRET);
 console.log(process.env.SUPABASE_URL);
 console.log(process.env.GEMINI_API_KEY);
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+// app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -63,7 +63,7 @@ app.get("/auth/github/callback", async (req, res) => {
       sameSite: 'none', // Required for cross-origin
       maxAge: 24 * 60 * 60 * 1000,
       path: '/',
-      domain: 'mergefi.onrender.com' // Match your domain
+      // domain: 'mergefi.onrender.com' // Match your domain
     });
 
     // Send message to parent window and close popup
