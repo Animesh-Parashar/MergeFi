@@ -18,6 +18,14 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 
+// Update CORS configuration
+app.use(cors({
+  origin: process.env.FRONTEND_URL,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+}));
+
 // 1️⃣ Redirect user to GitHub for login
 app.get("/auth/github", (req, res) => {
   const redirectUri = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&scope=read:user%20repo`;
@@ -48,12 +56,14 @@ app.get("/auth/github/callback", async (req, res) => {
       tokenLength: accessToken ? accessToken.length : 0,
     });
 
+    // Update cookie settings in the callback
     res.cookie('github_token', accessToken, {
       httpOnly: true,
-      sameSite: 'none', // Required for cross-origin cookies
+      secure: true,  // Required for HTTPS
+      sameSite: 'none', // Required for cross-origin
       maxAge: 24 * 60 * 60 * 1000,
       path: '/',
-      secure: true  // Required for sameSite: 'none'
+      domain: 'mergefi.onrender.com' // Match your domain
     });
 
     // Send message to parent window and close popup

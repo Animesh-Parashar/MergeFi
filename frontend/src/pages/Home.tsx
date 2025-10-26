@@ -65,10 +65,15 @@ export function Home() {
     fetchRegisteredRepos();
   }, []);
 
+  // Update the checkAuthStatus function
   const checkAuthStatus = async () => {
     try {
       const response = await axios.get('https://mergefi.onrender.com/api/auth/status', {
         withCredentials: true,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.data.authenticated) {
