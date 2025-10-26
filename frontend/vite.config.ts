@@ -11,7 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       buffer: 'buffer/',
-      process: 'process/browser',
+      process: 'process/browser.js',
       util: 'util',
       stream: 'stream-browserify',
     },
@@ -24,7 +24,7 @@ export default defineConfig({
       plugins: [
         inject({
           Buffer: ['buffer', 'Buffer'], // ✅ this line creates Buffer before env.mjs runs
-          process: 'process/browser',
+          process: 'process/browser.js',
         }),
       ],
     },
