@@ -24,7 +24,8 @@ app.use(cors({
   origin: process.env.FRONTEND_URL,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+  // Add 'priority' to the allowedHeaders
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'priority']
 }));
 app.use((req, res, next) => {
   console.log('[DEBUG COOKIES]', req.headers.cookie);
