@@ -16,15 +16,18 @@ const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 // 1️⃣ Redirect user to GitHub for login
 app.get("/auth/github", (req, res) => {
   const redirectUri = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&scope=read:user%20repo`;
+  console.log('[auth/github] redirecting user to GitHub OAuth', { clientId: CLIENT_ID });
   res.redirect(redirectUri);
 });
 
 // 2️⃣ GitHub redirects here with `code`
 app.get("/auth/github/callback", async (req, res) => {
   const { code } = req.query;
+  console.log('[auth/github/callback] received callback', { hasCode: !!code });
 
   try {
     // Exchange code for access token
+    console.log('[auth/github/callback] exchanging code for access token');
     const tokenRes = await axios.post(
       `https://github.com/login/oauth/access_token`,
       {
@@ -36,6 +39,9 @@ app.get("/auth/github/callback", async (req, res) => {
     );
 
     const accessToken = tokenRes.data.access_token;
+    console.log('[auth/github/callback] obtained access token', {
+      tokenLength: accessToken ? accessToken.length : 0,
+    });
 
     res.cookie('github_token', accessToken, {
       httpOnly: true,
@@ -58,7 +64,7 @@ app.get("/auth/github/callback", async (req, res) => {
       </script>
     `);
   } catch (err) {
-    console.error(err);
+    console.error('[auth/github/callback] error exchanging code for token:', err && err.message ? err.message : err);
     res.send(`
       <script>
         if (window.opener) {
@@ -80,20 +86,23 @@ app.get("/api/auth/status", async (req, res) => {
   const { github_token } = req.cookies;
 
   if (!github_token) {
+    console.log('[api/auth/status] no github_token cookie present');
     return res.json({ authenticated: false });
   }
 
   try {
+    console.log('[api/auth/status] verifying github token by fetching user from GitHub');
     const userRes = await axios.get('https://api.github.com/user', {
       headers: { Authorization: `Bearer ${github_token}` },
     });
-
+    console.log('[api/auth/status] github user fetched', { login: userRes.data?.login });
     res.json({
       authenticated: true,
       user: userRes.data
     });
   } catch (error) {
     // Token is invalid
+    console.error('[api/auth/status] error validating github token:', error && error.message ? error.message : error);
     res.clearCookie('github_token');
     res.json({ authenticated: false });
   }
@@ -104,16 +113,19 @@ app.get("/api/auth/user", async (req, res) => {
   const { github_token } = req.cookies;
 
   if (!github_token) {
+    console.log('[api/auth/user] no github_token cookie present');
     return res.status(401).json({ error: "Not authenticated" });
   }
 
   try {
+    console.log('[api/auth/user] fetching user profile from GitHub');
     const userRes = await axios.get('https://api.github.com/user', {
       headers: { Authorization: `Bearer ${github_token}` },
     });
-
+    console.log('[api/auth/user] fetched user', { login: userRes.data?.login });
     res.json(userRes.data);
   } catch (error) {
+    console.error('[api/auth/user] error fetching user from GitHub:', error && error.message ? error.message : error);
     res.status(401).json({ error: "Invalid token" });
   }
 });
@@ -130,6 +142,19 @@ import transactionRoutes from './routes/transaction.routes.js'
 
 app.use("/api", githubroute);
 app.use("/api/transactions", transactionRoutes);
+
+// Lightweight health endpoints
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development'
+  });
+});
+
+// common k8s/readiness probe path
+app.get('/healthz', (req, res) => res.status(200).send('ok'));
 
 app.listen(process.env.PORT, () =>
   console.log(`Server running on http://localhost:${process.env.PORT}`)
