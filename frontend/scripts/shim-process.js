@@ -7,17 +7,17 @@
  * This creates a tiny shim that re-exports ../browser.js if missing.
  */
 
-const fs = require('fs');
-const path = require('path');
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { join, dirname } from 'path';
 
-const shimPath = path.join(__dirname, '..', 'node_modules', 'process', 'browser', 'browser.js');
-const shimDir = path.dirname(shimPath);
+const shimPath = join(__dirname, '..', 'node_modules', 'process', 'browser', 'browser.js');
+const shimDir = dirname(shimPath);
 
 try {
-  if (!fs.existsSync(shimPath)) {
-    fs.mkdirSync(shimDir, { recursive: true });
+  if (!existsSync(shimPath)) {
+    mkdirSync(shimDir, { recursive: true });
     const content = "module.exports = require('../browser.js');\n";
-    fs.writeFileSync(shimPath, content, { encoding: 'utf8' });
+    writeFileSync(shimPath, content, { encoding: 'utf8' });
     console.log('[shim-process] created', shimPath);
   } else {
     console.log('[shim-process] already exists:', shimPath);
