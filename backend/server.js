@@ -47,7 +47,9 @@ app.get("/auth/github/callback", async (req, res) => {
       httpOnly: true,
       sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000,
-      path: '/'
+      path: '/',
+      secure: true, // add this for HTTPS
+      domain: '.onrender.com' // if both frontend and backend are on *.onrender.com
     });
 
     // Send message to parent window and close popup
