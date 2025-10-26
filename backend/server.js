@@ -63,7 +63,7 @@ app.get("/auth/github/callback", async (req, res) => {
       sameSite: 'none', // Required for cross-origin
       maxAge: 24 * 60 * 60 * 1000,
       path: '/',
-      // domain: 'mergefi.onrender.com' // Match your domain
+      domain: 'mergefi.onrender.com' // Match your domain
     });
 
     // Send message to parent window and close popup
