@@ -23,6 +23,9 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
+// Add ethers imports
+import { BrowserProvider, Contract } from 'ethers';
+
 interface PRData {
   id: number;
   repo: string;
@@ -61,8 +64,22 @@ export function Contributor() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // New: NFT state
+  interface NFTItem {
+    tokenId: number;
+    amountRaw: string;
+    repoName: string;
+    contributorName: string;
+    timestamp: number;
+  }
+
+  const [nfts, setNfts] = useState<NFTItem[]>([]);
+  const [nftLoading, setNftLoading] = useState(false);
+  const [nftError, setNftError] = useState<string | null>(null);
+
   useEffect(() => {
     fetchContributorData();
+    fetchContributorNFTs()
   }, []);
 
   const fetchContributorData = async () => {
@@ -86,6 +103,116 @@ export function Contributor() {
       setError(err.response?.data?.error || 'Failed to fetch data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  async function fetchContributorNFTs() {
+    setNftError(null);
+    setNftLoading(true);
+    setNfts([]);
+
+    try {
+      const eth = (window as any).ethereum;
+      if (!eth) {
+        setNftError('Ethereum provider (MetaMask) not found in window');
+        return;
+      }
+
+      // Ask provider for chainId and account (user may already be connected)
+      const chainIdHex = await eth.request({ method: 'eth_chainId' });
+      const chainId = parseInt(chainIdHex, 16);
+
+      // Build a small local contract-address mapping (matches mapping in CrossChainNFTService)
+      const contractAddressMap: Record<number, string> = {
+        11155420: "0x8c920A7cd5862f3c2ec8269EC1baB3071F51788C",
+        421614:  "0x673eC263392486Aa19621c4B12D90A39f0ce72d0",
+        84532:   "0xfd1feba71394e0af5f97ea6365fe86870b36c112",
+        11155111:"0x5e7489631db30cce2f020f4c6e0243d85a1ad595",
+        10143:   "0xfd1feba71394e0af5f97ea6365fe86870b36c112",
+        80002:   "0xfd1feba71394e0af5f97ea6365fe86870b36c112",
+      };
+
+      const contractAddress = contractAddressMap[chainId];
+      if (!contractAddress) {
+        setNftError(`No Contributor NFT contract configured for chain ${chainId}`);
+        return;
+      }
+
+      // Minimal ABI for the read functions we need
+      const CONTRIBUTOR_NFT_READ_ABI = [
+        {
+          inputs: [{ internalType: 'address', name: 'contributor', type: 'address' }],
+          name: 'getContributorTokens',
+          outputs: [{ internalType: 'uint256[]', name: '', type: 'uint256[]' }],
+          stateMutability: 'view',
+          type: 'function',
+        },
+        {
+          inputs: [{ internalType: 'uint256', name: 'tokenId', type: 'uint256' }],
+          name: 'getRewardData',
+          outputs: [
+            {
+              components: [
+                { internalType: 'uint256', name: 'amount', type: 'uint256' },
+                { internalType: 'string', name: 'repoName', type: 'string' },
+                { internalType: 'string', name: 'contributorName', type: 'string' },
+                { internalType: 'uint256', name: 'timestamp', type: 'uint256' },
+              ],
+              internalType: 'struct ContributorReward',
+              name: '',
+              type: 'tuple',
+            },
+          ],
+          stateMutability: 'view',
+          type: 'function',
+        },
+      ];
+
+      const provider = new BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+      const contract = new Contract(contractAddress, CONTRIBUTOR_NFT_READ_ABI, provider);
+
+      // get token IDs
+      const tokenIds: any[] = await contract.getContributorTokens(address);
+      if (!tokenIds || tokenIds.length === 0) {
+        setNfts([]);
+        return;
+      }
+
+      // Fetch reward data for each token
+      const results: NFTItem[] = await Promise.all(
+        tokenIds.map(async (tid: any) => {
+          const tokenId = Number(tid.toString());
+          const reward = await contract.getRewardData(tokenId);
+          return {
+            tokenId,
+            amountRaw: reward.amount.toString(),
+            repoName: reward.repoName,
+            contributorName: reward.contributorName,
+            timestamp: Number(reward.timestamp),
+          };
+        })
+      );
+      console.log(results);
+      setNfts(results);
+    } catch (err: any) {
+      console.error('Error fetching contributor NFTs:', err);
+      setNftError(err?.message || String(err));
+    } finally {
+      setNftLoading(false);
+    }
+  }
+
+  // Utility to format USDC-like amounts (assumes 6 decimals in contract)
+  const formatUSDC = (raw: string) => {
+    try {
+      const bn = BigInt(raw);
+      const whole = bn / BigInt(1_000_000);
+      const frac = Number(bn % BigInt(1_000_000)).toString().padStart(6, '0').slice(0, 2); // 2 decimals
+      return `$${whole.toString()}.${frac} USDC`;
+    } catch {
+      return `${raw}`;
     }
   };
 
@@ -377,6 +504,39 @@ export function Contributor() {
                   Total: {stats.totalPRs} contributions | ${earnings.totalEarnings} PyUSD earned
                 </div>
               </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* New: Contributor Reward NFTs */}
+        <div className="mb-12">
+          <h2 className="text-2xl font-bold mb-4">Your Reward NFTs</h2>
+          <Card>
+            <div className="p-4">
+              {nftLoading ? (
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading NFTs...</span>
+                </div>
+              ) : nftError ? (
+                <div className="text-red-400">Error: {nftError}</div>
+              ) : nfts.length === 0 ? (
+                <div className="text-gray-400">No reward NFTs found for connected wallet</div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-4">
+                  {nfts.map((nft) => (
+                    <div key={nft.tokenId} className="p-4 bg-gray-900 border border-gray-700 rounded">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm text-gray-400">Token #{nft.tokenId}</div>
+                        <div className="text-xs text-gray-500">{new Date(nft.timestamp * 1000).toLocaleString()}</div>
+                      </div>
+                      <div className="font-bold mb-1">{nft.repoName}</div>
+                      <div className="text-sm text-gray-400 mb-2">@{nft.contributorName}</div>
+                      <div className="text-white font-semibold">{formatUSDC(nft.amountRaw)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
         </div>
