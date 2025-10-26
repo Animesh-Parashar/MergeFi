@@ -6,6 +6,9 @@ import { Button } from '../components/Button';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+// Add import for waitForCookies
+import { waitForCookies } from '../utils/waitForCookies';
+
 export function Home() {
   const [showTerminal, setShowTerminal] = useState(false);
   const [terminalLines, setTerminalLines] = useState<string[]>([]);
@@ -40,7 +43,15 @@ export function Home() {
 
   // Check if user is already authenticated on component mount
   useEffect(() => {
-    checkAuthStatus();
+    (async () => {
+      // Wait for auth cookie to appear before checking auth status to avoid false negatives
+      try {
+        await waitForCookies({ cookieName: 'github_token', timeoutMs: 7000 });
+      } catch {
+        // proceed anyway on timeout
+      }
+      checkAuthStatus();
+    })();
   }, []);
 
   // Listen for OAuth completion message from popup
@@ -143,21 +154,25 @@ export function Home() {
       const checkClosed = setInterval(() => {
         if (popup?.closed) {
           clearInterval(checkClosed);
-          // Check auth status after popup closes
-          setTimeout(() => {
-            if (!authProcessed) { // Only check if we haven't processed auth yet
-              checkAuthStatus().then(() => {
-                if (!isConnected && !authProcessed) {
-                  handleAuthError('Authentication was cancelled or failed');
-                }
-              });
+          // Check auth status after popup closes. Wait for github_token cookie before checking
+          setTimeout(async () => {
+            if (!authProcessed) {
+              try {
+                await waitForCookies({ cookieName: 'github_token', timeoutMs: 7000 });
+              } catch {
+                // timeout - proceed to checkAuthStatus anyway
+              }
+              await checkAuthStatus();
+              if (!isConnected && !authProcessed) {
+                handleAuthError('Authentication was cancelled or failed');
+              }
             }
           }, 1000);
         }
       }, 1000);
     }, 1000);
   };
-
+  
   const handleAuthSuccess = async () => {
     // Prevent duplicate processing
     if (authProcessed) return;
