@@ -6,6 +6,11 @@ import cookieParser from "cookie-parser";
 
 dotenv.config();
 const app = express();
+console.log(process.env.FRONTEND_URL);
+console.log(process.env.GITHUB_CLIENT_ID);
+console.log(process.env.GITHUB_CLIENT_SECRET);
+console.log(process.env.SUPABASE_URL);
+console.log(process.env.GEMINI_API_KEY);
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
