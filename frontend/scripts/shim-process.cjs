@@ -1,14 +1,14 @@
-/**
- * shim-process.js
- *
- * Ensures node_modules/process/browser/browser.js exists so Vite/Rollup
- * won't fail on imports like "process/browser/browser".
- *
- * This creates a tiny shim that re-exports ../browser.js if missing.
- */
+// shim-process.cjs
+//
+// CommonJS version of the shim that ensures
+// node_modules/process/browser/browser.js exists so Vite/Rollup
+// won't fail on imports like "process/browser/browser".
+//
+// This file uses CommonJS so __dirname is defined even when
+// the project uses "type": "module" in package.json.
 
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { join, dirname } from 'path';
+const { existsSync, mkdirSync, writeFileSync } = require('fs');
+const { join, dirname } = require('path');
 
 const shimPath = join(__dirname, '..', 'node_modules', 'process', 'browser', 'browser.js');
 const shimDir = dirname(shimPath);
@@ -24,5 +24,5 @@ try {
   }
 } catch (err) {
   console.error('[shim-process] error creating shim:', err && err.message ? err.message : err);
-  // Do not fail install/build; just warn.
+  // Do not fail install/build; just warn.
 }

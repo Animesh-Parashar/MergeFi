@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "postinstall": "node ./scripts/shim-process.js"
+    "postinstall": "node ./scripts/shim-process.cjs"
   },
   "dependencies": {
     "@avail-project/nexus-core": "^0.0.1",
