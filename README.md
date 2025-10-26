@@ -1,6 +1,6 @@
 
 
-# MergiFi — AI-Powered **Cross-Chain Rewards**: Built on **Avail** for seamless cross-chain transactions.
+# MergeFi — AI-Powered **Cross-Chain Rewards**: Built on **Avail** for seamless cross-chain transactions.
 * **Transparency**: All transactions are tracked and verified on-chain.
 * Enables smooth USDC transfers to contributors across supported networks. Reward Pools for Open Source Contributions
 
