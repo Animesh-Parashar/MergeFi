@@ -86,7 +86,7 @@ Maintainer Repo
 
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/MergeFimgit
+git clone https://github.com/<your-username>/MergeFi.git
 cd MergeFi
 
 # Install dependencies
